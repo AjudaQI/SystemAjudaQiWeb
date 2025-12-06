@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Users, MessageCircle, User, UserPlus, Home, HelpCircle, Star, LogOut, Lock, Shield } from "lucide-react"
+import { Users, MessageCircle, User, UserPlus, Home, HelpCircle, Star, LogOut, Lock, Shield, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks"
 
@@ -124,6 +124,16 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
 
   return (
     <>
+      {/* Mobile Menu Button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-card border border-border shadow-lg"
+        onClick={toggleSidebar}
+        aria-label="Toggle menu"
+      >
+        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+      </Button>
 
       {/* Overlay for mobile */}
       {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={toggleSidebar} />}
@@ -131,40 +141,40 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed left-0 top-0 h-full w-80 bg-card border-r border-border z-40 transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed left-0 top-0 h-full w-64 sm:w-72 lg:w-80 bg-card border-r border-border z-40 transform transition-transform duration-300 ease-in-out lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="p-6 border-b border-border">
-            <h1 className="text-2xl font-bold text-primary">Ajudaqi</h1>
-            <p className="text-sm text-muted-foreground">Plataforma de Ajuda Universitária</p>
+          <div className="p-4 sm:p-6 border-b border-border flex-shrink-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-primary">Ajudaqi</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Plataforma de Ajuda Universitária</p>
           </div>
 
           {/* User Info */}
-          <div className="p-6 border-b border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <Avatar className="h-12 w-12">
+          <div className="p-4 sm:p-6 border-b border-border flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+              <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                 <AvatarImage src="/student-avatar.png" />
                 <AvatarFallback>JS</AvatarFallback>
               </Avatar>
-              <div className="flex-1">
-                <h3 className="font-semibold">{userInfo.name}</h3>
-                <p className="text-sm text-muted-foreground">{userInfo.course}</p>
-                <p className="text-xs text-muted-foreground">{userInfo.period}</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base truncate">{userInfo.name}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{userInfo.course}</p>
+                <p className="text-xs text-muted-foreground truncate">{userInfo.period}</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Badge variant="outline" className="flex items-center gap-1">
+              <Badge variant="outline" className="flex items-center gap-1 text-xs">
                 <Star className="h-3 w-3" />
                 {userInfo.rating !== null && typeof userInfo.rating === "number" ? userInfo.rating.toFixed(1) : "—"}
               </Badge>
             </div>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4">
+          {/* Navigation - Scrollable */}
+          <nav className="flex-1 overflow-y-auto p-4 min-h-0">
             <ul className="space-y-2">
               {menuItems.map((item) => {
                 const Icon = item.icon
@@ -183,7 +193,7 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
                     <Button
                       variant={isActive ? "secondary" : "ghost"}
                       className={cn(
-                        "w-full justify-start gap-3 h-12",
+                        "w-full justify-start gap-2 sm:gap-3 h-10 sm:h-12 text-sm sm:text-base",
                         isDisabled && "opacity-50 cursor-not-allowed"
                       )}
                       disabled={isDisabled}
@@ -199,13 +209,13 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
                         }
                       }}
                     >
-                      <Icon className="h-5 w-5" />
-                      <span className="flex-1 text-left">{item.label}</span>
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{item.label}</span>
                       {isDisabled && (
-                        <Lock className="h-4 w-4 text-muted-foreground" />
+                        <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       )}
                       {item.badge && !isDisabled && (
-                        <Badge variant="destructive" className="ml-auto">
+                        <Badge variant="destructive" className="ml-auto flex-shrink-0 text-xs">
                           {item.badge}
                         </Badge>
                       )}
@@ -216,9 +226,10 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
             </ul>
           </nav>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-border">
-            <Button variant="outline" className="w-full bg-transparent" onClick={handleLogout}>
+          {/* Footer - Always visible */}
+          <div className="p-4 border-t border-border flex-shrink-0 bg-card">
+            <Button variant="outline" className="w-full bg-transparent h-10 sm:h-12 text-sm sm:text-base" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
               Sair
             </Button>
           </div>

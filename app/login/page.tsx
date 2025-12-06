@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,23 @@ export default function LoginPage() {
   const router = useRouter()
   const [tab, setTab] = useState("login")
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [cursos, setCursos] = useState<Array<{ CUR_ID: number; CUR_DESC: string }>>([])
+
+  // Buscar cursos do banco de dados
+  useEffect(() => {
+    const fetchCursos = async () => {
+      try {
+        const res = await fetch('/api/cursos')
+        const data = await res.json()
+        if (data.ok && data.cursos) {
+          setCursos(data.cursos)
+        }
+      } catch (err) {
+        console.error('Erro ao buscar cursos:', err)
+      }
+    }
+    fetchCursos()
+  }, [])
 
   // Função para aplicar máscara de CPF
   const applyCpfMask = (value: string): string => {
@@ -91,17 +108,6 @@ export default function LoginPage() {
     
     return true
   }
-
-  
-  const cursos = [
-    { id: 0, desc: "Engenharia de Software" },
-    { id: 1, desc: "Medicina" },
-    { id: 2, desc: "Administração" },
-    { id: 3, desc: "Ciências Contábeis" },
-    { id: 4, desc: "Psicologia" },
-    { id: 5, desc: "Estética e Cosmético" },
-    { id: 6, desc: "Odontologia" },
-  ]
 
   const periodos = [
     { id: 1, desc: "1º Período" },
@@ -470,8 +476,8 @@ export default function LoginPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {cursos.map((c) => (
-                              <SelectItem key={c.id} value={c.id.toString()}>
-                                {c.desc}
+                              <SelectItem key={c.CUR_ID} value={c.CUR_ID.toString()}>
+                                {c.CUR_DESC}
                               </SelectItem>
                             ))}
                           </SelectContent>
