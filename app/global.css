@@ -1,0 +1,275 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Novo esquema de cores moderno e vibrante */
+  --background: oklch(0.99 0.01 0); /* Branco quase puro */
+  --foreground: oklch(0.15 0.02 0); /* Preto suave */
+  --card: oklch(1 0 0); /* Branco puro */
+  --card-foreground: oklch(0.15 0.02 0); /* Preto suave */
+  --popover: oklch(1 0 0); /* Branco puro */
+  --popover-foreground: oklch(0.15 0.02 0); /* Preto suave */
+  --primary: oklch(0.65 0.15 320); /* #BF69B1 - Rosa vibrante */
+  --primary-foreground: oklch(1 0 0); /* Branco */
+  --secondary: oklch(0.55 0.18 300); /* #993FBF - Roxo médio */
+  --secondary-foreground: oklch(1 0 0); /* Branco */
+  --muted: oklch(0.96 0.02 0); /* Cinza muito claro */
+  --muted-foreground: oklch(0.45 0.02 0); /* Cinza médio */
+  --accent: oklch(0.50 0.20 290); /* #932BD9 - Roxo escuro */
+  --accent-foreground: oklch(1 0 0); /* Branco */
+  --destructive: oklch(0.55 0.25 15); /* Vermelho vibrante */
+  --destructive-foreground: oklch(1 0 0); /* Branco */
+  --border: oklch(0.90 0.02 0); /* Cinza claro para bordas */
+  --input: oklch(1 0 0); /* Branco */
+  --ring: oklch(0.65 0.15 320); /* Rosa vibrante para focus */
+  --chart-1: oklch(0.65 0.15 320); /* #BF69B1 */
+  --chart-2: oklch(0.55 0.18 300); /* #993FBF */
+  --chart-3: oklch(0.50 0.20 290); /* #932BD9 */
+  --chart-4: oklch(0.45 0.22 280); /* #800FF2 */
+  --chart-5: oklch(0.60 0.20 310); /* Rosa-roxo */
+  --radius: 0.75rem;
+  --sidebar: oklch(0.98 0.01 0); /* Branco quase puro */
+  --sidebar-foreground: oklch(0.15 0.02 0); /* Preto suave */
+  --sidebar-primary: oklch(0.65 0.15 320); /* Rosa vibrante */
+  --sidebar-primary-foreground: oklch(1 0 0); /* Branco */
+  --sidebar-accent: oklch(0.55 0.18 300); /* Roxo médio */
+  --sidebar-accent-foreground: oklch(1 0 0); /* Branco */
+  --sidebar-border: oklch(0.90 0.02 0); /* Cinza claro */
+  --sidebar-ring: oklch(0.65 0.15 320); /* Rosa vibrante */
+}
+
+.dark {
+  --background: oklch(0.08 0.02 0); /* Preto profundo com toque roxo */
+  --foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --card: oklch(0.12 0.02 0); /* Cinza escuro com toque roxo */
+  --card-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --popover: oklch(0.12 0.02 0); /* Cinza escuro com toque roxo */
+  --popover-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --primary: oklch(0.70 0.18 320); /* Rosa mais vibrante no modo escuro */
+  --primary-foreground: oklch(0.08 0.02 0); /* Preto profundo */
+  --secondary: oklch(0.60 0.20 300); /* Roxo mais vibrante no modo escuro */
+  --secondary-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --muted: oklch(0.18 0.02 0); /* Cinza escuro */
+  --muted-foreground: oklch(0.65 0.02 0); /* Cinza médio */
+  --accent: oklch(0.55 0.22 290); /* Roxo escuro mais vibrante */
+  --accent-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --destructive: oklch(0.60 0.25 15); /* Vermelho vibrante no modo escuro */
+  --destructive-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --border: oklch(0.25 0.02 0); /* Cinza escuro para bordas */
+  --input: oklch(0.15 0.02 0); /* Cinza escuro para inputs */
+  --ring: oklch(0.70 0.18 320); /* Rosa vibrante para focus */
+  --chart-1: oklch(0.70 0.18 320); /* Rosa vibrante */
+  --chart-2: oklch(0.60 0.20 300); /* Roxo médio */
+  --chart-3: oklch(0.55 0.22 290); /* Roxo escuro */
+  --chart-4: oklch(0.50 0.24 280); /* Roxo mais escuro */
+  --chart-5: oklch(0.65 0.22 310); /* Rosa-roxo */
+  --sidebar: oklch(0.10 0.02 0); /* Preto profundo com toque roxo */
+  --sidebar-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --sidebar-primary: oklch(0.70 0.18 320); /* Rosa vibrante */
+  --sidebar-primary-foreground: oklch(0.08 0.02 0); /* Preto profundo */
+  --sidebar-accent: oklch(0.60 0.20 300); /* Roxo médio */
+  --sidebar-accent-foreground: oklch(0.95 0.01 0); /* Branco quase puro */
+  --sidebar-border: oklch(0.25 0.02 0); /* Cinza escuro */
+  --sidebar-ring: oklch(0.70 0.18 320); /* Rosa vibrante */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Added custom font family variables for Space Grotesk and DM Sans */
+  --font-heading: "Space Grotesk", var(--font-sans);
+  --font-body: "DM Sans", var(--font-sans);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    background: linear-gradient(135deg, 
+      oklch(0.99 0.01 0) 0%, 
+      oklch(0.98 0.02 320) 25%, 
+      oklch(0.99 0.01 0) 50%, 
+      oklch(0.98 0.02 300) 75%, 
+      oklch(0.99 0.01 0) 100%);
+    background-attachment: fixed;
+  }
+
+  /* Added heading styles using Space Grotesk */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    background: linear-gradient(135deg, 
+      oklch(0.65 0.15 320), 
+      oklch(0.55 0.18 300), 
+      oklch(0.50 0.20 290), 
+      oklch(0.45 0.22 280));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease-in-out infinite;
+  }
+
+  /* Gradientes personalizados para elementos especiais */
+  .gradient-primary {
+    background: linear-gradient(135deg, 
+      oklch(0.65 0.15 320), 
+      oklch(0.55 0.18 300));
+  }
+
+  .gradient-secondary {
+    background: linear-gradient(135deg, 
+      oklch(0.55 0.18 300), 
+      oklch(0.50 0.20 290));
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, 
+      oklch(0.50 0.20 290), 
+      oklch(0.45 0.22 280));
+  }
+
+  .gradient-full {
+    background: linear-gradient(135deg, 
+      oklch(0.65 0.15 320), 
+      oklch(0.55 0.18 300), 
+      oklch(0.50 0.20 290), 
+      oklch(0.45 0.22 280));
+  }
+
+  /* Animações suaves */
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px oklch(0.65 0.15 320 / 0.3); }
+    50% { box-shadow: 0 0 40px oklch(0.65 0.15 320 / 0.6); }
+  }
+
+  .float-animation {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Estilos para cards modernos */
+  .modern-card {
+    background: oklch(1 0 0 / 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid oklch(0.90 0.02 0 / 0.2);
+    box-shadow: 
+      0 4px 6px -1px oklch(0.65 0.15 320 / 0.1),
+      0 2px 4px -1px oklch(0.55 0.18 300 / 0.1),
+      0 0 0 1px oklch(0.90 0.02 0 / 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 10px 25px -3px oklch(0.65 0.15 320 / 0.2),
+      0 4px 6px -2px oklch(0.55 0.18 300 / 0.1),
+      0 0 0 1px oklch(0.90 0.02 0 / 0.1);
+  }
+
+  /* Estilos para botões modernos */
+  .modern-button {
+    background: linear-gradient(135deg, 
+      oklch(0.65 0.15 320), 
+      oklch(0.55 0.18 300));
+    border: none;
+    color: white;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .modern-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+      transparent, 
+      oklch(1 0 0 / 0.2), 
+      transparent);
+    transition: left 0.5s ease;
+  }
+
+  .modern-button:hover::before {
+    left: 100%;
+  }
+
+  .modern-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px oklch(0.65 0.15 320 / 0.4);
+  }
+
+  /* Hide Next.js dev indicator completely */
+  [data-nextjs-dev-tools-button],
+  [data-nextjs-dev-tools-button] *,
+  [data-next-mark="true"],
+  [data-next-mark="true"] * {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
