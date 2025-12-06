@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Users, MessageCircle, User, UserPlus, Home, HelpCircle, Star, LogOut, Lock, Shield, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 // TODO: Remover estas flags quando as funcionalidades estiverem prontas
 const ENABLE_CHAT = false
@@ -22,6 +23,7 @@ interface SidebarProps {
 export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [userRating, setUserRating] = useState<number | null>(null)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const { user } = useAuth()
@@ -114,6 +116,10 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   }
 
   const handleLogout = () => {
+    setShowLogoutDialog(true)
+  }
+
+  const confirmLogout = () => {
     // Remover dados do usuário do localStorage
     localStorage.removeItem('ajudaqi_user')
     // Redirecionar para a página de login
@@ -235,6 +241,26 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Saída</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja sair da sua conta? Você precisará fazer login novamente para acessar o sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLogoutDialog(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmLogout}>
+              Sair
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

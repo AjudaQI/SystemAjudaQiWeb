@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BookOpen, Users, MessageCircle, Trophy, Clock, Star, Sparkles } from "lucide-react"
+import { BookOpen, Users, MessageCircle, Trophy, Clock, Star, Sparkles, Eye, EyeOff } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -29,6 +29,8 @@ export default function LoginPage() {
   const [tab, setTab] = useState("login")
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [cursos, setCursos] = useState<Array<{ CUR_ID: number; CUR_DESC: string }>>([])
+  const [showPassword, setShowPassword] = useState(false)
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
 
   // Buscar cursos do banco de dados
   useEffect(() => {
@@ -378,14 +380,24 @@ export default function LoginPage() {
                     </div>
                     <div className="space-y-3">
                       <Label htmlFor="password" className="text-base font-medium">Senha</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="h-12 rounded-xl border-2 focus:border-primary transition-colors pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                        >
+                          {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
                     </div>
                     {error && (
                       <p className="text-sm text-red-600">{error}</p>
@@ -501,14 +513,24 @@ export default function LoginPage() {
                     </div>
                     <div className="space-y-3">
                       <Label htmlFor="register-password" className="text-base font-medium">Senha</Label>
-                      <Input
-                        id="register-password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="register-password"
+                          type={showRegisterPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="h-12 rounded-xl border-2 focus:border-primary transition-colors pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={showRegisterPassword ? "Ocultar senha" : "Mostrar senha"}
+                        >
+                          {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
                     </div>
                     {error && (
                       <p className="text-sm text-red-600">{error}</p>
