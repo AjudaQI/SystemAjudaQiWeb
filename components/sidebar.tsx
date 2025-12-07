@@ -8,6 +8,7 @@ import { Users, MessageCircle, User, UserPlus, Home, HelpCircle, Star, LogOut, L
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { VersionLabel } from "@/components/version-label"
 
 // TODO: Remover estas flags quando as funcionalidades estiverem prontas
 const ENABLE_CHAT = false
@@ -234,10 +235,13 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
 
           {/* Footer - Always visible */}
           <div className="p-4 border-t border-border flex-shrink-0 bg-card">
-            <Button variant="outline" className="w-full bg-transparent h-10 sm:h-12 text-sm sm:text-base" onClick={handleLogout}>
+            <Button variant="outline" className="w-full bg-transparent h-10 sm:h-12 text-sm sm:text-base mb-3" onClick={handleLogout}>
               <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
               Sair
             </Button>
+            <div className="flex justify-center">
+              <VersionLabel />
+            </div>
           </div>
         </div>
       </div>

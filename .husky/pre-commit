@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Incrementar versão automaticamente
+echo "🔄 Incrementando versão..."
+npm run bump-version
+
+# Adicionar package.json modificado ao staging para incluir no commit
+git add package.json
+
+echo "✅ Versão incrementada e package.json adicionado ao commit"
+
