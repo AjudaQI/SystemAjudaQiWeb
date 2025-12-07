@@ -173,4 +173,139 @@ export async function GET(req: NextRequest) {
 	}
 }
 
+export async function PUT(req: NextRequest) {
+	try {
+		const { respostaId, usuarioId, descricao } = await req.json()
+
+		if (!respostaId || !usuarioId || !descricao || !descricao.trim()) {
+			return NextResponse.json(
+				{ ok: false, error: 'respostaId, usuarioId e descricao são obrigatórios' },
+				{ status: 400 },
+			)
+		}
+
+		const pool = await getPool()
+
+		// Verificar se a resposta existe e se pertence ao usuário
+		const checkReq = pool.request()
+		checkReq.input('RES_IDRESPOSTA', respostaId)
+		checkReq.input('USU_ID', usuarioId)
+
+		const checkRes = await checkReq.query<{
+			RES_IDRESPOSTA: number
+			RES_IDUSUARIO: number
+		}>(`
+      SELECT RES_IDRESPOSTA, RES_IDUSUARIO
+      FROM RESPOSTA
+      WHERE RES_IDRESPOSTA = @RES_IDRESPOSTA
+    `)
+
+		if (!checkRes.recordset[0]) {
+			return NextResponse.json(
+				{ ok: false, error: 'Resposta não encontrada' },
+				{ status: 404 },
+			)
+		}
+
+		// Verificar se a resposta pertence ao usuário
+		const respostaUsuarioId = typeof checkRes.recordset[0].RES_IDUSUARIO === 'string'
+			? parseInt(checkRes.recordset[0].RES_IDUSUARIO, 10)
+			: Number(checkRes.recordset[0].RES_IDUSUARIO)
+		
+		const usuarioIdNumber = typeof usuarioId === 'string' ? parseInt(usuarioId, 10) : Number(usuarioId)
+
+		if (respostaUsuarioId !== usuarioIdNumber) {
+			return NextResponse.json(
+				{ ok: false, error: 'Você não tem permissão para editar esta resposta' },
+				{ status: 403 },
+			)
+		}
+
+		// Atualizar a resposta
+		const updateReq = pool.request()
+		updateReq.input('RES_IDRESPOSTA', respostaId)
+		updateReq.input('RES_DESCRICAO', descricao.trim())
+
+		await updateReq.query(`
+      UPDATE RESPOSTA
+      SET RES_DESCRICAO = @RES_DESCRICAO
+      WHERE RES_IDRESPOSTA = @RES_IDRESPOSTA
+    `)
+
+		return NextResponse.json({
+			ok: true,
+			message: 'Resposta atualizada com sucesso',
+		})
+	} catch (err) {
+		console.error('Erro ao atualizar resposta:', err)
+		return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
+	}
+}
+
+export async function DELETE(req: NextRequest) {
+	try {
+		const { respostaId, usuarioId } = await req.json()
+
+		if (!respostaId || !usuarioId) {
+			return NextResponse.json(
+				{ ok: false, error: 'respostaId e usuarioId são obrigatórios' },
+				{ status: 400 },
+			)
+		}
+
+		const pool = await getPool()
+
+		// Verificar se a resposta existe e se pertence ao usuário
+		const checkReq = pool.request()
+		checkReq.input('RES_IDRESPOSTA', respostaId)
+		checkReq.input('USU_ID', usuarioId)
+
+		const checkRes = await checkReq.query<{
+			RES_IDRESPOSTA: number
+			RES_IDUSUARIO: number
+		}>(`
+      SELECT RES_IDRESPOSTA, RES_IDUSUARIO
+      FROM RESPOSTA
+      WHERE RES_IDRESPOSTA = @RES_IDRESPOSTA
+    `)
+
+		if (!checkRes.recordset[0]) {
+			return NextResponse.json(
+				{ ok: false, error: 'Resposta não encontrada' },
+				{ status: 404 },
+			)
+		}
+
+		// Verificar se a resposta pertence ao usuário
+		const respostaUsuarioId = typeof checkRes.recordset[0].RES_IDUSUARIO === 'string'
+			? parseInt(checkRes.recordset[0].RES_IDUSUARIO, 10)
+			: Number(checkRes.recordset[0].RES_IDUSUARIO)
+		
+		const usuarioIdNumber = typeof usuarioId === 'string' ? parseInt(usuarioId, 10) : Number(usuarioId)
+
+		if (respostaUsuarioId !== usuarioIdNumber) {
+			return NextResponse.json(
+				{ ok: false, error: 'Você não tem permissão para excluir esta resposta' },
+				{ status: 403 },
+			)
+		}
+
+		// Excluir a resposta (as avaliações serão excluídas automaticamente devido ao CASCADE)
+		const deleteReq = pool.request()
+		deleteReq.input('RES_IDRESPOSTA', respostaId)
+
+		await deleteReq.query(`
+      DELETE FROM RESPOSTA
+      WHERE RES_IDRESPOSTA = @RES_IDRESPOSTA
+    `)
+
+		return NextResponse.json({
+			ok: true,
+			message: 'Resposta excluída com sucesso',
+		})
+	} catch (err) {
+		console.error('Erro ao excluir resposta:', err)
+		return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
+	}
+}
 

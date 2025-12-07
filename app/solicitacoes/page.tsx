@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams, useRouter, useParams } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,11 +11,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, User, MessageCircle, Search, Filter, Edit, Trash2, Star } from "lucide-react"
+import { Plus, User, MessageCircle, Search, Filter, Edit, Trash2, Star, ChevronLeft, ChevronRight } from "lucide-react"
 import { useFormatDate, useStatusColors, useAuth } from "@/hooks"
 import { useToast } from "@/components/ui/use-toast"
 import { solicitacoesStyles } from "@/app/solicitacoes/style"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { AuthGuard } from "@/components/auth-guard"
 
 interface Materia {
@@ -80,8 +81,11 @@ interface HelpRequest {
   }
 }
 
-function SolicitacoesPageContent() {
+export function SolicitacoesPageContent() {
   const searchParams = useSearchParams()
+  const params = useParams()
+  const router = useRouter()
+  const pageNumber = params?.page ? parseInt(params.page as string, 10) : 1
   const [activeSection, setActiveSection] = useState("help-requests")
   const [showForm, setShowForm] = useState(false)
   const [showMyRequests, setShowMyRequests] = useState(false)
@@ -119,6 +123,11 @@ function SolicitacoesPageContent() {
   const [ratingLoadingId, setRatingLoadingId] = useState<number | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [requestToDelete, setRequestToDelete] = useState<HelpRequest | null>(null)
+  const [editingResponseId, setEditingResponseId] = useState<number | null>(null)
+  const [editingResponseText, setEditingResponseText] = useState("")
+  const [isEditingResponse, setIsEditingResponse] = useState(false)
+  const [deleteResponseDialogOpen, setDeleteResponseDialogOpen] = useState(false)
+  const [responseToDelete, setResponseToDelete] = useState<number | null>(null)
 
   // Verificar query parameters
   useEffect(() => {
@@ -276,8 +285,8 @@ function SolicitacoesPageContent() {
     fetchMaterias()
   }, [])
 
-  // Lista de todas as matérias (sem filtro de período)
-  const subjects = materias.map(m => m.MAT_DESC)
+  // Lista de todas as matérias (sem filtro de período) - remover duplicatas
+  const subjects = [...new Set(materias.map(m => m.MAT_DESC))]
 
   // Função para obter o período de uma matéria
   const getPeriodoByMateria = (materiaDesc: string): string | null => {
@@ -592,6 +601,257 @@ function SolicitacoesPageContent() {
     setResponseText("")
   }
 
+  const handleEditResponse = (resposta: ResponseFromAPI) => {
+    setEditingResponseId(resposta.RES_IDRESPOSTA)
+    setEditingResponseText(resposta.RES_DESCRICAO)
+  }
+
+  const handleCancelEditResponse = () => {
+    setEditingResponseId(null)
+    setEditingResponseText("")
+  }
+
+  const handleSaveEditResponse = async () => {
+    if (!editingResponseId || !editingResponseText.trim()) {
+      toast({
+        title: "Ops",
+        description: "Digite uma resposta antes de salvar",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!user?.USU_ID) {
+      toast({
+        title: "Faça login",
+        description: "Você precisa estar logado para editar uma resposta",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsEditingResponse(true)
+
+    try {
+      const usuarioId = typeof user.USU_ID === 'string'
+        ? parseInt(user.USU_ID)
+        : user.USU_ID
+
+      const response = await fetch('/api/respostas', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          respostaId: editingResponseId,
+          usuarioId,
+          descricao: editingResponseText.trim(),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!data.ok) {
+        throw new Error(data.error || "Erro ao editar resposta")
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Resposta editada com sucesso!",
+      })
+
+      // Recarregar todas as respostas
+      await fetchRespostas()
+
+      // Limpar estado de edição
+      setEditingResponseId(null)
+      setEditingResponseText("")
+    } catch (error) {
+      console.error('Erro ao editar resposta:', error)
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao editar resposta",
+        variant: "destructive"
+      })
+    } finally {
+      setIsEditingResponse(false)
+    }
+  }
+
+  const handleDeleteResponse = (respostaId: number) => {
+    setResponseToDelete(respostaId)
+    setDeleteResponseDialogOpen(true)
+  }
+
+  const confirmDeleteResponse = async () => {
+    if (!responseToDelete || !user?.USU_ID) {
+      return
+    }
+
+    try {
+      const usuarioId = typeof user.USU_ID === 'string'
+        ? parseInt(user.USU_ID)
+        : user.USU_ID
+
+      const response = await fetch('/api/respostas', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          respostaId: responseToDelete,
+          usuarioId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!data.ok) {
+        throw new Error(data.error || "Erro ao excluir resposta")
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Resposta excluída com sucesso!",
+      })
+
+      // Recarregar todas as respostas
+      await fetchRespostas()
+
+      // Limpar estado
+      setDeleteResponseDialogOpen(false)
+      setResponseToDelete(null)
+    } catch (error) {
+      console.error('Erro ao excluir resposta:', error)
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao excluir resposta",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Calcular rating final usando fórmula ponderada: rating_final = (v/(v+m)) * media + (m/(v+m)) * media_global
+  // A constante 'm' determina quantas avaliações são necessárias para confiar na média própria
+  // Valores maiores de 'm' dão mais peso ao número de avaliações
+  const calculateRatingFinal = (
+    media: number | null,
+    totalAvaliacoes: number | null,
+    mediaGlobal: number
+  ): number => {
+    // Se não tem avaliações, retorna um valor muito baixo para que fique por último na ordenação
+    if (!media || totalAvaliacoes === null || totalAvaliacoes === 0) {
+      return -1 // Valor negativo para garantir que respostas sem avaliações fiquem por último
+    }
+
+    const v = totalAvaliacoes // número de avaliações
+    // Constante 'm' maior = mais peso no número de avaliações
+    // Com m=100: resposta com 1 avaliação tem apenas 1% de peso na própria média (99% média global)
+    //             resposta com 2 avaliações tem 2% de peso na própria média (98% média global)
+    //             resposta com 5 avaliações tem 5% de peso na própria média (95% média global)
+    //             resposta com 10 avaliações tem 9% de peso na própria média (91% média global)
+    // Isso garante que respostas com mais avaliações sejam priorizadas
+    // Exemplo com média global = 4.0:
+    //   - 5 estrelas (1 voto): (1/101)*5 + (100/101)*4 = 0.0495 + 3.9604 = 4.0099
+    //   - 4.5 estrelas (2 votos): (2/102)*4.5 + (100/102)*4 = 0.0882 + 3.9216 = 4.0098
+    // Com m=100, respostas com mais votos ganham quando a diferença de média é pequena (0.5 estrelas)
+    // Se a diferença de média for maior (ex: 1 estrela), a resposta com maior média ainda pode ganhar
+    // Com m=150, respostas com 1 avaliação têm apenas 0.66% de peso na própria média
+    // Respostas com 2 avaliações têm 1.32% de peso na própria média
+    // Isso garante que respostas com mais avaliações sempre ganhem quando a diferença de média é pequena
+    const m = 150 // constante de suavização (Bayesian average) - valor muito alto para priorizar número de avaliações
+    
+    // Fórmula: quanto mais avaliações (v), mais confiança na média própria
+    // Respostas com poucas avaliações são "puxadas" para a média global
+    const ratingFinal = (v / (v + m)) * media + (m / (v + m)) * mediaGlobal
+    return ratingFinal
+  }
+
+  // Calcular média global de TODAS as respostas do sistema (não apenas da pergunta)
+  const getGlobalAverage = (): number => {
+    // Pegar todas as respostas de todas as perguntas
+    const allResponses = Object.values(responsesByRequest).flat()
+    
+    if (allResponses.length === 0) return 3.0 // valor padrão conservador se não houver respostas
+
+    // Calcular média ponderada: somar todas as avaliações e dividir pelo total
+    let totalSum = 0
+    let totalCount = 0
+
+    allResponses.forEach(response => {
+      if (response.MEDIA_AVALIACAO !== null && 
+          response.TOTAL_AVALIACOES !== null && 
+          response.TOTAL_AVALIACOES > 0) {
+        // Somar todas as avaliações desta resposta
+        totalSum += response.MEDIA_AVALIACAO * response.TOTAL_AVALIACOES
+        totalCount += response.TOTAL_AVALIACOES
+      }
+    })
+
+    if (totalCount === 0) return 3.0
+
+    // Média global = soma de todas as avaliações / total de avaliações
+    const mediaCalculada = totalSum / totalCount
+    
+    // Se há poucas avaliações no sistema, usar uma média mais conservadora
+    // para garantir que respostas com mais avaliações sejam priorizadas
+    if (totalCount < 10) {
+      // Usar média entre a calculada e 3.0 (valor médio) para ser mais conservador
+      return (mediaCalculada + 3.0) / 2
+    }
+    
+    return mediaCalculada
+  }
+
+  // Ordenar respostas por rating final (melhor primeiro)
+  const getSortedResponses = (requestId: number): ResponseFromAPI[] => {
+    const responses = responsesByRequest[requestId] || []
+    if (responses.length === 0) return []
+
+    // Usar média global de TODAS as respostas do sistema
+    const mediaGlobal = getGlobalAverage()
+
+    return [...responses].sort((a, b) => {
+      const avaliacoesA = a.TOTAL_AVALIACOES ?? 0
+      const avaliacoesB = b.TOTAL_AVALIACOES ?? 0
+      
+      // Primeiro: priorizar respostas com avaliações sobre respostas sem avaliações
+      if (avaliacoesA === 0 && avaliacoesB > 0) {
+        return 1 // b vem primeiro
+      }
+      if (avaliacoesB === 0 && avaliacoesA > 0) {
+        return -1 // a vem primeiro
+      }
+      
+      const ratingA = calculateRatingFinal(
+        a.MEDIA_AVALIACAO,
+        a.TOTAL_AVALIACOES,
+        mediaGlobal
+      )
+      const ratingB = calculateRatingFinal(
+        b.MEDIA_AVALIACAO,
+        b.TOTAL_AVALIACOES,
+        mediaGlobal
+      )
+
+      // Se a diferença de rating é muito pequena (menos de 0.1), priorizar resposta com mais avaliações
+      if (Math.abs(ratingB - ratingA) < 0.1) {
+        // Se uma tem mais avaliações, ela ganha
+        if (avaliacoesB !== avaliacoesA) {
+          return avaliacoesB - avaliacoesA
+        }
+      }
+
+      // Ordenar por rating final (maior primeiro), depois por data (mais recente primeiro)
+      if (Math.abs(ratingB - ratingA) > 0.01) {
+        return ratingB - ratingA
+      }
+      
+      // Se ratings são muito próximos, ordenar por data (mais recente primeiro)
+      return new Date(b.RES_DATARESPOSTA).getTime() - new Date(a.RES_DATARESPOSTA).getTime()
+    })
+  }
+
   const handleSendResponse = async () => {
     if (!respondingRequestId) return
 
@@ -693,7 +953,22 @@ function SolicitacoesPageContent() {
     return matchesSearch && matchesSubject && matchesPriority && matchesPeriod && matchesPeriodRule && matchesMyRequests
   })
 
+  // Paginação: 10 solicitações por página
+  const ITEMS_PER_PAGE = 10
+  const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE)
+  const currentPage = pageNumber > 0 && pageNumber <= totalPages ? pageNumber : 1
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
+
   const uniqueSubjects = [...new Set(requests.map((r) => r.subject))]
+
+  // Redirecionar se a página for inválida
+  useEffect(() => {
+    if (pageNumber !== currentPage && totalPages > 0) {
+      router.push(`/solicitacoes/${currentPage}`)
+    }
+  }, [pageNumber, currentPage, totalPages, router])
 
   return (
     <div className={solicitacoesStyles.container}>
@@ -751,8 +1026,8 @@ function SolicitacoesPageContent() {
                             } />
                           </SelectTrigger>
                           <SelectContent>
-                            {subjects.length > 0 && subjects.map((subject) => (
-                              <SelectItem key={subject} value={subject}>
+                            {subjects.length > 0 && subjects.map((subject, index) => (
+                              <SelectItem key={`subject-${index}-${subject}`} value={subject}>
                                 {subject}
                               </SelectItem>
                             ))}
@@ -920,8 +1195,8 @@ function SolicitacoesPageContent() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Todas as matérias</SelectItem>
-                          {uniqueSubjects.map((subject) => (
-                            <SelectItem key={subject} value={subject}>
+                          {uniqueSubjects.map((subject, index) => (
+                            <SelectItem key={`filter-subject-${index}-${subject}`} value={subject}>
                               {subject}
                             </SelectItem>
                           ))}
@@ -997,16 +1272,11 @@ function SolicitacoesPageContent() {
                   </Card>
                 ) : (
                   <div className="grid gap-4">
-                    {filteredRequests.map((request) => (
+                    {paginatedRequests.map((request) => (
                       <Card key={request.id} className="hover:shadow-md transition-shadow">
                         <CardHeader className="pb-3">
                           <div className="flex items-center gap-2">
-                            <Badge variant={getPriorityColor(request.priority)} className="flex items-center gap-1">
-                              {getPriorityIcon(request.priority)}
-                              {request.priority.toUpperCase()}
-                            </Badge>
                             <Badge variant="outline">{request.period}º Período</Badge>
-                            <Badge variant="outline">{request.estimatedHours}h</Badge>
                             {request.availableForChat && (
                               <Badge variant="secondary" className="flex items-center gap-1">
                                 <MessageCircle className="h-3 w-3" />
@@ -1139,31 +1409,97 @@ function SolicitacoesPageContent() {
                                 <p className="text-sm text-muted-foreground">
                                   Nenhuma resposta ainda. Seja o primeiro a ajudar!
                                 </p>
-                              ) : (
-                                <div className="space-y-3">
-                                  {responsesByRequest[request.id].map((resposta) => (
-                                    <div key={resposta.RES_IDRESPOSTA} className="rounded-md border p-3">
-                                      <div className="flex items-center justify-between gap-4">
-                                        <div>
-                                          <p className="text-sm font-semibold flex items-center gap-1">
-                                            {resposta.USU_NOME}
-                                            {typeof resposta.USU_AVALIACAO === "number" && (
-                                              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                                                • ⭐ {resposta.USU_AVALIACAO.toFixed(1)}
-                                              </span>
-                                            )}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {resposta.USUARIO_CURSO_DESC || "Curso não informado"} • {resposta.USUARIO_PERIODO_DESC || "Período não informado"}
-                                          </p>
-                                        </div>
+                              ) : (() => {
+                                const sortedResponses = getSortedResponses(request.id)
+                                const mediaGlobal = getGlobalAverage()
+                                const responseCount = sortedResponses.length
+                                // Calcular altura adaptativa: ~150px por resposta, máximo 400px
+                                // Mínimo de altura para 1 resposta, máximo de 400px
+                                const adaptiveHeight = Math.min(Math.max(responseCount * 150, 200), 400)
+                                
+                                return (
+                                  <ScrollArea className="pr-4" style={{ height: `${adaptiveHeight}px`, maxHeight: '400px' }}>
+                                    <div className="space-y-3">
+                                      {sortedResponses.map((resposta, index) => {
+                                        // Calcular rating final para exibir badge se for a melhor
+                                        const ratingFinal = calculateRatingFinal(
+                                          resposta.MEDIA_AVALIACAO,
+                                          resposta.TOTAL_AVALIACOES,
+                                          mediaGlobal
+                                        )
+                                        const topRating = sortedResponses.length > 0 
+                                          ? calculateRatingFinal(
+                                              sortedResponses[0].MEDIA_AVALIACAO,
+                                              sortedResponses[0].TOTAL_AVALIACOES,
+                                              mediaGlobal
+                                            )
+                                          : 0
+                                        // Só mostrar badge se tiver avaliações e for realmente a melhor
+                                        const hasAvaliacoes = resposta.TOTAL_AVALIACOES !== null && resposta.TOTAL_AVALIACOES > 0
+                                        const isTopRated = index === 0 && 
+                                          sortedResponses.length > 1 && 
+                                          hasAvaliacoes &&
+                                          Math.abs(ratingFinal - topRating) < 0.01 &&
+                                          ratingFinal > 0 // Garantir que não é uma resposta sem avaliações
+
+                                        return (
+                                        <div key={resposta.RES_IDRESPOSTA} className="rounded-md border p-3 relative">
+                                          <div className="flex items-center justify-between gap-4">
+                                            <div className="flex-1">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <p className="text-sm font-semibold flex items-center gap-1">
+                                                  {resposta.USU_NOME}
+                                                  {typeof resposta.USU_AVALIACAO === "number" && (
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                                      • ⭐ {resposta.USU_AVALIACAO.toFixed(1)}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                                {isTopRated && sortedResponses.length > 1 && (
+                                                  <Badge className="bg-yellow-500 text-white text-xs px-2 py-0.5">
+                                                    ⭐ Melhor avaliada
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              <p className="text-xs text-muted-foreground">
+                                                {resposta.USUARIO_CURSO_DESC || "Curso não informado"} • {resposta.USUARIO_PERIODO_DESC || "Período não informado"}
+                                              </p>
+                                            </div>
                                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                                           {formatTimeAgo(resposta.RES_DATARESPOSTA)}
                                         </span>
                                       </div>
-                                      <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
-                                        {resposta.RES_DESCRICAO}
-                                      </p>
+                                      {editingResponseId === resposta.RES_IDRESPOSTA ? (
+                                        <div className="mt-2 space-y-2">
+                                          <Textarea
+                                            value={editingResponseText}
+                                            onChange={(e) => setEditingResponseText(e.target.value)}
+                                            className="min-h-[100px]"
+                                            disabled={isEditingResponse}
+                                          />
+                                          <div className="flex justify-end gap-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={handleCancelEditResponse}
+                                              disabled={isEditingResponse}
+                                            >
+                                              Cancelar
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              onClick={handleSaveEditResponse}
+                                              disabled={isEditingResponse}
+                                            >
+                                              {isEditingResponse ? "Salvando..." : "Salvar"}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
+                                          {resposta.RES_DESCRICAO}
+                                        </p>
+                                      )}
                                       <div className="mt-3 flex flex-col gap-1 text-xs">
                                         {(() => {
                                           // Converter ambos para número para comparação correta e estrita
@@ -1182,9 +1518,30 @@ function SolicitacoesPageContent() {
                                             respostaUserId !== undefined &&
                                             Number(currentUserId) === Number(respostaUserId)
                                           
-                                          // SEMPRE bloquear se for a própria resposta
-                                          if (isOwnResponse) {
-                                            return null
+                                          // Se for a própria resposta, mostrar botões de editar/excluir (apenas se não estiver editando)
+                                          if (isOwnResponse && editingResponseId !== resposta.RES_IDRESPOSTA) {
+                                            return (
+                                              <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => handleEditResponse(resposta)}
+                                                  className="h-7 text-xs"
+                                                >
+                                                  <Edit className="h-3 w-3 mr-1" />
+                                                  Editar
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="destructive"
+                                                  onClick={() => handleDeleteResponse(resposta.RES_IDRESPOSTA)}
+                                                  className="h-7 text-xs"
+                                                >
+                                                  <Trash2 className="h-3 w-3 mr-1" />
+                                                  Excluir
+                                                </Button>
+                                              </div>
+                                            )
                                           }
                                           
                                           // Mostrar botões apenas se NÃO for a própria resposta
@@ -1228,14 +1585,81 @@ function SolicitacoesPageContent() {
                                         </div>
                                       </div>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
+                                        )
+                                      })}
+                                    </div>
+                                  </ScrollArea>
+                                )
+                              })()}
                             </div>
                           </div>
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                )}
+
+                {/* Controles de Paginação */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/solicitacoes/${currentPage - 1}`)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Anterior
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        // Mostrar apenas algumas páginas ao redor da atual
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 2 && page <= currentPage + 2)
+                        ) {
+                          return (
+                            <Button
+                              key={page}
+                              variant={page === currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => router.push(`/solicitacoes/${page}`)}
+                              className={page === currentPage ? "" : ""}
+                            >
+                              {page}
+                            </Button>
+                          )
+                        } else if (
+                          page === currentPage - 3 ||
+                          page === currentPage + 3
+                        ) {
+                          return (
+                            <span key={page} className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          )
+                        }
+                        return null
+                      })}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/solicitacoes/${currentPage + 1}`)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Próxima
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                )}
+
+                {totalPages > 1 && (
+                  <div className="text-center text-sm text-muted-foreground mt-2">
+                    Página {currentPage} de {totalPages} • {filteredRequests.length} solicitação{filteredRequests.length !== 1 ? "ões" : ""} no total
                   </div>
                 )}
               </div>
@@ -1272,14 +1696,45 @@ function SolicitacoesPageContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={deleteResponseDialogOpen} onOpenChange={setDeleteResponseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir esta resposta? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteResponseDialogOpen(false)
+                setResponseToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteResponse}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 export default function SolicitacoesPage() {
-  return (
-    <AuthGuard>
-      <SolicitacoesPageContent />
-    </AuthGuard>
-  )
+  const router = useRouter()
+  
+  useEffect(() => {
+    // Redirecionar /solicitacoes para /solicitacoes/1
+    router.replace('/solicitacoes/1')
+  }, [router])
+
+  return null
 }

@@ -46,8 +46,28 @@ export async function POST(req: Request) {
       user.USU_PERIODO_DESC = periodoRes.recordset[0]?.PER_DESCRICAO || null
     }
 
-    const hash = crypto.createHash('sha512').update(senha).digest()
-    if (!user.USU_SENHA || !Buffer.compare(Buffer.from(user.USU_SENHA), hash) === 0) {
+    // Gerar hash da senha fornecida no mesmo formato usado no cadastro (hex)
+    const hash = crypto.createHash('sha512').update(senha).digest('hex')
+    
+    // USU_SENHA é armazenado como VARBINARY no banco
+    // O driver mssql geralmente retorna VARBINARY como Buffer
+    let storedHash: string
+    if (!user.USU_SENHA) {
+      return NextResponse.json({ ok: false, error: 'Usuário ou senha inválidos.' }, { status: 401 })
+    }
+    
+    if (user.USU_SENHA instanceof Buffer) {
+      storedHash = user.USU_SENHA.toString('hex')
+    } else if (typeof user.USU_SENHA === 'string') {
+      // Se já vier como string hex, usar diretamente
+      storedHash = user.USU_SENHA
+    } else {
+      // Tentar converter para Buffer e depois para hex
+      storedHash = Buffer.from(user.USU_SENHA as any).toString('hex')
+    }
+    
+    // Comparar os hashes em formato hex
+    if (hash !== storedHash) {
       return NextResponse.json({ ok: false, error: 'Usuário ou senha inválidos.' }, { status: 401 })
     }
     if (user.USU_ATIVO !== 1 && user.USU_ATIVO !== true) {
