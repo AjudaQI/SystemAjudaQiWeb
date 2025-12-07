@@ -1085,13 +1085,15 @@ function SolicitacoesPageContent() {
                                       Chat
                                     </Button>
                                   )}
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => handleHelpRequest(request)}
-                                    variant={respondingRequestId === request.id ? "secondary" : "default"}
-                                  >
-                                    {respondingRequestId === request.id ? "Cancelar" : "Ajudar"}
-                                  </Button>
+                                  {respondingRequestId !== request.id && (
+                                    <Button 
+                                      size="sm" 
+                                      onClick={() => handleHelpRequest(request)}
+                                      variant="default"
+                                    >
+                                      Ajudar
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                               </div>

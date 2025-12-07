@@ -53,6 +53,14 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
     materia: null as Materia | null,
     courseId: 0,
   })
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState({
+    isOpen: false,
+    course: null as Course | null,
+  })
+  const [deleteMateriaConfirmDialog, setDeleteMateriaConfirmDialog] = useState({
+    isOpen: false,
+    materia: null as Materia | null,
+  })
 
   useEffect(() => {
     fetchData()
@@ -159,10 +167,14 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
     }
   }
 
-  const handleDeleteCourse = async (courseId: number) => {
-    if (!confirm("Tem certeza que deseja excluir este curso?")) {
-      return
-    }
+  const handleDeleteCourse = (course: Course) => {
+    setDeleteConfirmDialog({ isOpen: true, course })
+  }
+
+  const confirmDeleteCourse = async () => {
+    if (!deleteConfirmDialog.course) return
+
+    const courseId = deleteConfirmDialog.course.CUR_ID
 
     try {
       const response = await fetch(`/api/cursos?id=${courseId}`, {
@@ -177,6 +189,7 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
           description: data.message || "Curso excluído com sucesso!",
         })
         fetchData()
+        setDeleteConfirmDialog({ isOpen: false, course: null })
       } else {
         toast({
           title: "Erro",
@@ -268,10 +281,14 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
     }
   }
 
-  const handleDeleteMateria = async (materiaId: number) => {
-    if (!confirm("Tem certeza que deseja excluir esta matéria?")) {
-      return
-    }
+  const handleDeleteMateria = (materia: Materia) => {
+    setDeleteMateriaConfirmDialog({ isOpen: true, materia })
+  }
+
+  const confirmDeleteMateria = async () => {
+    if (!deleteMateriaConfirmDialog.materia) return
+
+    const materiaId = deleteMateriaConfirmDialog.materia.MAT_ID
 
     try {
       const response = await fetch(`/api/materias?id=${materiaId}`, {
@@ -286,6 +303,7 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
           description: data.message || "Matéria excluída com sucesso!",
         })
         fetchData()
+        setDeleteMateriaConfirmDialog({ isOpen: false, materia: null })
       } else {
         toast({
           title: "Erro",
@@ -379,7 +397,7 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDeleteCourse(course.CUR_ID)}
+                      onClick={() => handleDeleteCourse(course)}
                       className="text-ajudaqi-error hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -440,7 +458,7 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteMateria(materia.MAT_ID)}
+                            onClick={() => handleDeleteMateria(materia)}
                             className="text-ajudaqi-error hover:text-red-700"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -455,6 +473,74 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
           ))}
         </div>
       )}
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <Dialog 
+        open={deleteConfirmDialog.isOpen} 
+        onOpenChange={(open) => setDeleteConfirmDialog({ isOpen: open, course: null })}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-ajudaqi-text-secondary">
+              Tem certeza que deseja excluir o curso <strong>{deleteConfirmDialog.course?.CUR_DESC}</strong>?
+            </p>
+            <p className="text-sm text-ajudaqi-text-secondary mt-2">
+              Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteConfirmDialog({ isOpen: false, course: null })}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={confirmDeleteCourse}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmação de Exclusão de Matéria */}
+      <Dialog 
+        open={deleteMateriaConfirmDialog.isOpen} 
+        onOpenChange={(open) => setDeleteMateriaConfirmDialog({ isOpen: open, materia: null })}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-ajudaqi-text-secondary">
+              Tem certeza que deseja excluir a matéria <strong>{deleteMateriaConfirmDialog.materia?.MAT_DESC}</strong>?
+            </p>
+            <p className="text-sm text-ajudaqi-text-secondary mt-2">
+              Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteMateriaConfirmDialog({ isOpen: false, materia: null })}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={confirmDeleteMateria}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
