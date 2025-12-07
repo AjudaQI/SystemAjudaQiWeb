@@ -23,17 +23,26 @@ export async function POST(req: NextRequest) {
 
 		const pool = await getPool()
 
-		// Garantir que a resposta existe
+		// Garantir que a resposta existe e verificar se o usuário não é o autor
 		const respostaCheck = pool.request()
 		respostaCheck.input('RESPOSTA_ID', respostaId)
-		const respostaRes = await respostaCheck.query<{ RES_IDRESPOSTA: number }>(`
-      SELECT RES_IDRESPOSTA
+		const respostaRes = await respostaCheck.query<{ RES_IDRESPOSTA: number; RES_IDUSUARIO: number }>(`
+      SELECT RES_IDRESPOSTA, RES_IDUSUARIO
       FROM RESPOSTA
       WHERE RES_IDRESPOSTA = @RESPOSTA_ID
     `)
 
 		if (!respostaRes.recordset[0]) {
 			return NextResponse.json({ ok: false, error: 'Resposta não encontrada' }, { status: 404 })
+		}
+
+		// BLOQUEAR: Usuário não pode avaliar sua própria resposta
+		const resposta = respostaRes.recordset[0]
+		if (resposta.RES_IDUSUARIO === usuarioId) {
+			return NextResponse.json(
+				{ ok: false, error: 'Você não pode avaliar sua própria resposta' },
+				{ status: 403 },
+			)
 		}
 
 	// Verificar se o usuário já avaliou esta resposta
@@ -92,8 +101,17 @@ export async function POST(req: NextRequest) {
 			USUARIO_AVALIACAO: number | null
 		}>(`
       SELECT 
-        (SELECT AVG(CAST(AVA_ESTRELA AS FLOAT)) FROM AVALIACAORESPOSTA WHERE AVA_IDRESPOSTA = @RESPOSTA_ID) AS MEDIA_AVALIACAO,
-        (SELECT COUNT(*) FROM AVALIACAORESPOSTA WHERE AVA_IDRESPOSTA = @RESPOSTA_ID) AS TOTAL_AVALIACOES,
+        -- Excluir autoavaliações do cálculo (avaliador não pode ser o autor da resposta)
+        (SELECT AVG(CAST(A.AVA_ESTRELA AS FLOAT)) 
+         FROM AVALIACAORESPOSTA A
+         INNER JOIN RESPOSTA R_AUX ON A.AVA_IDRESPOSTA = R_AUX.RES_IDRESPOSTA
+         WHERE A.AVA_IDRESPOSTA = @RESPOSTA_ID 
+           AND A.AVA_IDUSUARIO != R_AUX.RES_IDUSUARIO) AS MEDIA_AVALIACAO,
+        (SELECT COUNT(*) 
+         FROM AVALIACAORESPOSTA A
+         INNER JOIN RESPOSTA R_AUX ON A.AVA_IDRESPOSTA = R_AUX.RES_IDRESPOSTA
+         WHERE A.AVA_IDRESPOSTA = @RESPOSTA_ID 
+           AND A.AVA_IDUSUARIO != R_AUX.RES_IDUSUARIO) AS TOTAL_AVALIACOES,
         (SELECT TOP 1 AVA_ESTRELA FROM AVALIACAORESPOSTA WHERE AVA_IDRESPOSTA = @RESPOSTA_ID AND AVA_IDUSUARIO = @USUARIO_ID) AS USUARIO_AVALIACAO
     `)
 

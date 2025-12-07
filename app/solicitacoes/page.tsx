@@ -444,6 +444,28 @@ function SolicitacoesPageContent() {
 
     // Verificar se o usuário já avaliou esta resposta para mostrar mensagem apropriada
     const resposta = Object.values(responsesByRequest).flat().find(r => r.RES_IDRESPOSTA === respostaId)
+    
+    // BLOQUEAR: Verificar se o usuário está tentando avaliar sua própria resposta
+    if (resposta) {
+      const currentUserId = typeof user.USU_ID === 'string'
+        ? parseInt(user.USU_ID, 10)
+        : Number(user.USU_ID)
+      
+      // Converter ambos para número para comparação correta
+      const respostaUserId = typeof resposta.RES_IDUSUARIO === 'string'
+        ? parseInt(resposta.RES_IDUSUARIO, 10)
+        : Number(resposta.RES_IDUSUARIO)
+      
+      if (respostaUserId === currentUserId) {
+        toast({
+          title: "Avaliação não permitida",
+          description: "Você não pode avaliar sua própria resposta",
+          variant: "destructive"
+        })
+        return
+      }
+    }
+    
     const jaAvaliou = resposta && resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined
 
     setRatingLoadingId(respostaId)
@@ -1141,35 +1163,61 @@ function SolicitacoesPageContent() {
                                         {resposta.RES_DESCRICAO}
                                       </p>
                                       <div className="mt-3 flex flex-col gap-1 text-xs">
-                                        <div className="flex items-center gap-2">
-                                          <div className="flex items-center gap-1">
-                                            {[1, 2, 3, 4, 5].map((starValue) => {
-                                              const isActive = (resposta.USUARIO_AVALIACAO ?? 0) >= starValue
-                                              const jaAvaliou = resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined
-                                              return (
-                                                <button
-                                                  key={starValue}
-                                                  type="button"
-                                                  onClick={() => handleRateResponse(resposta.RES_IDRESPOSTA, starValue)}
-                                                  className="p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
-                                                  title={jaAvaliou 
-                                                    ? `Alterar avaliação para ${starValue} estrela${starValue > 1 ? "s" : ""}` 
-                                                    : `Avaliar com ${starValue} estrela${starValue > 1 ? "s" : ""}`}
-                                                  disabled={ratingLoadingId === resposta.RES_IDRESPOSTA}
-                                                >
-                                                  <Star
-                                                    className={`h-4 w-4 ${isActive ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
-                                                  />
-                                                </button>
-                                              )
-                                            })}
-                                          </div>
-                                          {resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined && (
-                                            <span className="text-xs text-muted-foreground italic">
-                                              (Sua avaliação)
-                                            </span>
-                                          )}
-                                        </div>
+                                        {(() => {
+                                          // Converter ambos para número para comparação correta e estrita
+                                          const currentUserId = user?.USU_ID 
+                                            ? (typeof user.USU_ID === 'string' ? parseInt(user.USU_ID, 10) : Number(user.USU_ID))
+                                            : null
+                                          const respostaUserId = typeof resposta.RES_IDUSUARIO === 'string' 
+                                            ? parseInt(resposta.RES_IDUSUARIO, 10) 
+                                            : Number(resposta.RES_IDUSUARIO)
+                                          
+                                          // BLOQUEAR: Não mostrar botões de avaliação se for a própria resposta
+                                          // Usar comparação estrita com conversão explícita para garantir que funcione sempre
+                                          const isOwnResponse = currentUserId !== null && 
+                                            currentUserId !== undefined && 
+                                            respostaUserId !== null && 
+                                            respostaUserId !== undefined &&
+                                            Number(currentUserId) === Number(respostaUserId)
+                                          
+                                          // SEMPRE bloquear se for a própria resposta
+                                          if (isOwnResponse) {
+                                            return null
+                                          }
+                                          
+                                          // Mostrar botões apenas se NÃO for a própria resposta
+                                          return (
+                                              <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1">
+                                                  {[1, 2, 3, 4, 5].map((starValue) => {
+                                                    const isActive = (resposta.USUARIO_AVALIACAO ?? 0) >= starValue
+                                                    const jaAvaliou = resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined
+                                                    return (
+                                                      <button
+                                                        key={starValue}
+                                                        type="button"
+                                                        onClick={() => handleRateResponse(resposta.RES_IDRESPOSTA, starValue)}
+                                                        className="p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+                                                        title={jaAvaliou 
+                                                          ? `Alterar avaliação para ${starValue} estrela${starValue > 1 ? "s" : ""}` 
+                                                          : `Avaliar com ${starValue} estrela${starValue > 1 ? "s" : ""}`}
+                                                        disabled={ratingLoadingId === resposta.RES_IDRESPOSTA}
+                                                      >
+                                                        <Star
+                                                          className={`h-4 w-4 ${isActive ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                                                        />
+                                                      </button>
+                                                    )
+                                                  })}
+                                                </div>
+                                                {resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined && (
+                                                  <span className="text-xs text-muted-foreground italic">
+                                                    (Sua avaliação)
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )
+                                        })()}
                                         <div className="text-muted-foreground">
                                           {resposta.MEDIA_AVALIACAO
                                             ? `${Number(resposta.MEDIA_AVALIACAO).toFixed(1)} / 5`
