@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { BookOpen, Users, MessageCircle, Trophy, Clock, Star, Sparkles, TrendingUp, Lock } from "lucide-react"
@@ -34,6 +33,7 @@ function DashboardPageContent() {
   const [ajudasSolicitadas, setAjudasSolicitadas] = useState<number>(0)
   const [ajudasPrestadas, setAjudasPrestadas] = useState<number>(0)
   const [avaliacaoMedia, setAvaliacaoMedia] = useState<number | null>(null)
+  const [totalAvaliacoes, setTotalAvaliacoes] = useState<number>(0)
   const [recentUserRequests, setRecentUserRequests] = useState<Array<{
     id: number
     subject: string
@@ -47,7 +47,7 @@ function DashboardPageContent() {
   const userRequests = getUserRequests()
   const { user } = useAuth()
   const { formatTimeAgo } = useFormatDate()
-  const { getStatusIcon, getPriorityColor } = useStatusColors()
+  const { getStatusIcon } = useStatusColors()
   
   const userName = user?.USU_NOME?.split(' ')[0] || "Usuário"
 
@@ -103,10 +103,16 @@ function DashboardPageContent() {
         const response = await fetch(`/api/usuarios/avaliacoes?usuarioId=${usuarioId}`)
         const data = await response.json()
 
-        if (data.ok && data.resumo?.media !== null && data.resumo?.media !== undefined) {
-          setAvaliacaoMedia(data.resumo.media)
+        if (data.ok && data.resumo) {
+          if (data.resumo.media !== null && data.resumo.media !== undefined) {
+            setAvaliacaoMedia(data.resumo.media)
+          } else {
+            setAvaliacaoMedia(null)
+          }
+          setTotalAvaliacoes(data.resumo.total || 0)
         } else {
           setAvaliacaoMedia(null)
+          setTotalAvaliacoes(0)
         }
       } catch (error) {
         console.error('Erro ao buscar avaliação média:', error)
@@ -200,7 +206,7 @@ function DashboardPageContent() {
 
 
   const handleSolicitarAjuda = () => {
-    router.push("/solicitacoes?nova=true")
+    router.push("/solicitacoes/1?nova=true")
   }
 
   const handleVerTodasSolicitacoes = () => {
@@ -256,6 +262,11 @@ function DashboardPageContent() {
                       </div>
                     </CardHeader>
                     <CardContent>
+                      {stat.title === "Avaliação Média" && totalAvaliacoes > 0 && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {totalAvaliacoes} {totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}
+                        </p>
+                      )}
                       <div className={stat.value === "EM DESENVOLVIMENTO" ? "text-sm font-semibold text-muted-foreground mb-1" : "text-3xl font-bold mb-1"}>
                         {stat.value}
                       </div>
@@ -292,12 +303,6 @@ function DashboardPageContent() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
                                 <h4 className="font-semibold text-base truncate">{request.title}</h4>
-                                <Badge 
-                                  variant={getPriorityColor(request.priority)}
-                                  className="text-xs px-2 py-1"
-                                >
-                                  {request.priority}
-                                </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground mb-2">{request.subject}</p>
                               <p className="text-xs text-muted-foreground">{request.time}</p>

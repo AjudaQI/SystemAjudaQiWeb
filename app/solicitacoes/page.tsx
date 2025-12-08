@@ -731,40 +731,34 @@ export function SolicitacoesPageContent() {
     }
   }
 
-  // Calcular rating final usando fórmula ponderada: rating_final = (v/(v+m)) * media + (m/(v+m)) * media_global
-  // A constante 'm' determina quantas avaliações são necessárias para confiar na média própria
-  // Valores maiores de 'm' dão mais peso ao número de avaliações
-  const calculateRatingFinal = (
+  // Calcular score combinado que pondera média e número de avaliações
+  // Fórmula: score = media * (1 + num_avaliacoes * multiplicador)
+  // Onde multiplicador determina quanto peso dar ao número de avaliações
+  // Esta fórmula garante que respostas com mais avaliações tenham score maior,
+  // mas também considera a qualidade (média)
+  // Com multiplicador = 0.15:
+  // - 5.0 com 1 voto: 5.0 * (1 + 1 * 0.15) = 5.0 * 1.15 = 5.75
+  // - 3.7 com 4 votos: 3.7 * (1 + 4 * 0.15) = 3.7 * 1.6 = 5.92 (melhor!)
+  const calculateCombinedScore = (
     media: number | null,
-    totalAvaliacoes: number | null,
-    mediaGlobal: number
+    totalAvaliacoes: number | null
   ): number => {
     // Se não tem avaliações, retorna um valor muito baixo para que fique por último na ordenação
     if (!media || totalAvaliacoes === null || totalAvaliacoes === 0) {
-      return -1 // Valor negativo para garantir que respostas sem avaliações fiquem por último
+      return -1
     }
 
-    const v = totalAvaliacoes // número de avaliações
-    // Constante 'm' maior = mais peso no número de avaliações
-    // Com m=100: resposta com 1 avaliação tem apenas 1% de peso na própria média (99% média global)
-    //             resposta com 2 avaliações tem 2% de peso na própria média (98% média global)
-    //             resposta com 5 avaliações tem 5% de peso na própria média (95% média global)
-    //             resposta com 10 avaliações tem 9% de peso na própria média (91% média global)
-    // Isso garante que respostas com mais avaliações sejam priorizadas
-    // Exemplo com média global = 4.0:
-    //   - 5 estrelas (1 voto): (1/101)*5 + (100/101)*4 = 0.0495 + 3.9604 = 4.0099
-    //   - 4.5 estrelas (2 votos): (2/102)*4.5 + (100/102)*4 = 0.0882 + 3.9216 = 4.0098
-    // Com m=100, respostas com mais votos ganham quando a diferença de média é pequena (0.5 estrelas)
-    // Se a diferença de média for maior (ex: 1 estrela), a resposta com maior média ainda pode ganhar
-    // Com m=150, respostas com 1 avaliação têm apenas 0.66% de peso na própria média
-    // Respostas com 2 avaliações têm 1.32% de peso na própria média
-    // Isso garante que respostas com mais avaliações sempre ganhem quando a diferença de média é pequena
-    const m = 150 // constante de suavização (Bayesian average) - valor muito alto para priorizar número de avaliações
+    const numAvaliacoes = totalAvaliacoes
+    const mediaNum = Number(media) || 0
     
-    // Fórmula: quanto mais avaliações (v), mais confiança na média própria
-    // Respostas com poucas avaliações são "puxadas" para a média global
-    const ratingFinal = (v / (v + m)) * media + (m / (v + m)) * mediaGlobal
-    return ratingFinal
+    // Multiplicador que determina quanto peso dar ao número de avaliações
+    // Valor de 0.15 significa que cada avaliação adicional aumenta o score em 15%
+    // Isso garante que respostas com mais avaliações sejam priorizadas
+    const multiplicador = 0.15
+    
+    // Score = média multiplicada por um fator que aumenta com o número de avaliações
+    const score = mediaNum * (1 + numAvaliacoes * multiplicador)
+    return score
   }
 
   // Calcular média global de TODAS as respostas do sistema (não apenas da pergunta)
@@ -823,31 +817,36 @@ export function SolicitacoesPageContent() {
         return -1 // a vem primeiro
       }
       
-      const ratingA = calculateRatingFinal(
-        a.MEDIA_AVALIACAO,
-        a.TOTAL_AVALIACOES,
-        mediaGlobal
-      )
-      const ratingB = calculateRatingFinal(
-        b.MEDIA_AVALIACAO,
-        b.TOTAL_AVALIACOES,
-        mediaGlobal
-      )
-
-      // Se a diferença de rating é muito pequena (menos de 0.1), priorizar resposta com mais avaliações
-      if (Math.abs(ratingB - ratingA) < 0.1) {
-        // Se uma tem mais avaliações, ela ganha
-        if (avaliacoesB !== avaliacoesA) {
-          return avaliacoesB - avaliacoesA
+      // Se ambas têm o mesmo número de avaliações E ambas têm avaliações, usar média simples
+      if (avaliacoesA === avaliacoesB && avaliacoesA > 0) {
+        const mediaA = Number(a.MEDIA_AVALIACAO) || 0
+        const mediaB = Number(b.MEDIA_AVALIACAO) || 0
+        
+        // Ordenar por média (maior primeiro)
+        if (mediaB !== mediaA) {
+          return mediaB - mediaA
         }
-      }
-
-      // Ordenar por rating final (maior primeiro), depois por data (mais recente primeiro)
-      if (Math.abs(ratingB - ratingA) > 0.01) {
-        return ratingB - ratingA
+        
+        // Se as médias são iguais, ordenar por data (mais recente primeiro)
+        return new Date(b.RES_DATARESPOSTA).getTime() - new Date(a.RES_DATARESPOSTA).getTime()
       }
       
-      // Se ratings são muito próximos, ordenar por data (mais recente primeiro)
+      // Se têm números diferentes de avaliações, usar score combinado
+      // que pondera tanto a média quanto o número de avaliações
+      const scoreA = calculateCombinedScore(a.MEDIA_AVALIACAO, a.TOTAL_AVALIACOES)
+      const scoreB = calculateCombinedScore(b.MEDIA_AVALIACAO, b.TOTAL_AVALIACOES)
+      
+      // Ordenar por score (maior primeiro)
+      if (Math.abs(scoreB - scoreA) > 0.001) {
+        return scoreB - scoreA
+      }
+      
+      // Se scores são muito próximos, priorizar a com mais avaliações
+      if (avaliacoesB !== avaliacoesA) {
+        return avaliacoesB - avaliacoesA
+      }
+      
+      // Se scores e avaliações são iguais, ordenar por data (mais recente primeiro)
       return new Date(b.RES_DATARESPOSTA).getTime() - new Date(a.RES_DATARESPOSTA).getTime()
     })
   }
@@ -1421,26 +1420,14 @@ export function SolicitacoesPageContent() {
                                   <ScrollArea className="pr-4" style={{ height: `${adaptiveHeight}px`, maxHeight: '400px' }}>
                                     <div className="space-y-3">
                                       {sortedResponses.map((resposta, index) => {
-                                        // Calcular rating final para exibir badge se for a melhor
-                                        const ratingFinal = calculateRatingFinal(
-                                          resposta.MEDIA_AVALIACAO,
-                                          resposta.TOTAL_AVALIACOES,
-                                          mediaGlobal
-                                        )
-                                        const topRating = sortedResponses.length > 0 
-                                          ? calculateRatingFinal(
-                                              sortedResponses[0].MEDIA_AVALIACAO,
-                                              sortedResponses[0].TOTAL_AVALIACOES,
-                                              mediaGlobal
-                                            )
-                                          : 0
                                         // Só mostrar badge se tiver avaliações e for realmente a melhor
                                         const hasAvaliacoes = resposta.TOTAL_AVALIACOES !== null && resposta.TOTAL_AVALIACOES > 0
+                                        
+                                        // Verificar se é a melhor resposta
+                                        // Se está no índice 0, tem avaliações, e há outras respostas, é a melhor
                                         const isTopRated = index === 0 && 
                                           sortedResponses.length > 1 && 
-                                          hasAvaliacoes &&
-                                          Math.abs(ratingFinal - topRating) < 0.01 &&
-                                          ratingFinal > 0 // Garantir que não é uma resposta sem avaliações
+                                          hasAvaliacoes
 
                                         return (
                                         <div key={resposta.RES_IDRESPOSTA} className="rounded-md border p-3 relative">
@@ -1730,11 +1717,14 @@ export function SolicitacoesPageContent() {
 
 export default function SolicitacoesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   
   useEffect(() => {
-    // Redirecionar /solicitacoes para /solicitacoes/1
-    router.replace('/solicitacoes/1')
-  }, [router])
+    // Redirecionar /solicitacoes para /solicitacoes/1 preservando query parameters
+    const queryString = searchParams.toString()
+    const newUrl = queryString ? `/solicitacoes/1?${queryString}` : '/solicitacoes/1'
+    router.replace(newUrl)
+  }, [router, searchParams])
 
   return null
 }

@@ -79,8 +79,23 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
     "/admin": "admin",
   }
   
+  // Função para determinar a seção baseada no pathname
+  const getSectionFromPathname = (path: string): string | undefined => {
+    // Verifica correspondência exata primeiro
+    if (routeToSectionMap[path]) {
+      return routeToSectionMap[path]
+    }
+    // Verifica se o pathname começa com alguma rota (para rotas dinâmicas como /solicitacoes/[page])
+    for (const [route, section] of Object.entries(routeToSectionMap)) {
+      if (path.startsWith(route + '/') || path === route) {
+        return section
+      }
+    }
+    return undefined
+  }
+  
   // Determina a seção ativa baseada na rota atual ou activeSection
-  const currentActiveSection = routeToSectionMap[pathname] || activeSection
+  const currentActiveSection = getSectionFromPathname(pathname) || activeSection
 
   // Verifica se o usuário tem permissão de administrador (USU_IDPERMISSAO = 4)
   const isAdmin = user?.USU_IDPERMISSAO === 4 || user?.USU_IDPERMISSAO === "4"
@@ -186,7 +201,10 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
               {menuItems.map((item) => {
                 const Icon = item.icon
                 // Determina se o item está ativo baseado na rota atual ou seção ativa
-                const isActive = pathname === item.route || (pathname === "/dashboard" && currentActiveSection === item.id)
+                // Verifica correspondência exata ou se o pathname começa com a rota do item (para rotas dinâmicas)
+                const isActive = pathname === item.route || 
+                  pathname.startsWith(item.route + '/') ||
+                  (pathname === "/dashboard" && currentActiveSection === item.id)
                 
                 // Verifica se o item está desabilitado
                 const isDisabled = 
