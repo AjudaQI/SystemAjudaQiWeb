@@ -210,7 +210,7 @@ function DashboardPageContent() {
   }
 
   const handleVerTodasSolicitacoes = () => {
-    router.push("/solicitacoes?minhas=true")
+    router.push("/solicitacoes")
   }
 
   const handleClickRequest = () => {

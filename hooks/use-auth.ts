@@ -6,6 +6,7 @@ interface User {
   USU_ID: number | string
   USU_NOME: string
   USU_EMAIL: string
+  USU_MATRICULA?: string
   USU_IDPERMISSAO?: number | string
   USU_IDCURSO?: number | string | null
   USU_IDPERIODO?: number | string | null

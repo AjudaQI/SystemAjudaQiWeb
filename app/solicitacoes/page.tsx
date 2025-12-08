@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter, useParams } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
+import { LoadingSpinner } from "@/components/loading-spinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +19,7 @@ import { solicitacoesStyles } from "@/app/solicitacoes/style"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AuthGuard } from "@/components/auth-guard"
+import { Comentarios } from "@/components/comentarios"
 
 interface Materia {
   MAT_ID: number
@@ -946,8 +948,8 @@ export function SolicitacoesPageContent() {
     const matchesPeriod = periodFilter === "all" || request.period === periodFilter
     const matchesPeriodRule = Number.parseInt(request.period) <= currentUserPeriod
     
-    // Se o filtro "Minhas Solicitações" estiver ativo, mostrar apenas as do usuário logado
-    const matchesMyRequests = !showMyRequests || request.author.isCurrentUser === true
+    // Se showMyRequests for true, mostrar apenas as do usuário; caso contrário, mostrar todas
+    const matchesMyRequests = showMyRequests ? request.author.isCurrentUser === true : true
 
     return matchesSearch && matchesSubject && matchesPriority && matchesPeriod && matchesPeriodRule && matchesMyRequests
   })
@@ -1505,19 +1507,24 @@ export function SolicitacoesPageContent() {
                                             respostaUserId !== undefined &&
                                             Number(currentUserId) === Number(respostaUserId)
                                           
-                                          // Se for a própria resposta, mostrar botões de editar/excluir (apenas se não estiver editando)
-                                          if (isOwnResponse && editingResponseId !== resposta.RES_IDRESPOSTA) {
+                                          // Verificar se é admin (permissão 2)
+                                          const isAdmin = user?.USU_IDPERMISSAO === 2 || user?.USU_IDPERMISSAO === '2'
+                                          
+                                          // Se for a própria resposta OU admin, mostrar botões de editar/excluir (apenas se não estiver editando)
+                                          if ((isOwnResponse || isAdmin) && editingResponseId !== resposta.RES_IDRESPOSTA) {
                                             return (
                                               <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() => handleEditResponse(resposta)}
-                                                  className="h-7 text-xs"
-                                                >
-                                                  <Edit className="h-3 w-3 mr-1" />
-                                                  Editar
-                                                </Button>
+                                                {isOwnResponse && (
+                                                  <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleEditResponse(resposta)}
+                                                    className="h-7 text-xs"
+                                                  >
+                                                    <Edit className="h-3 w-3 mr-1" />
+                                                    Editar
+                                                  </Button>
+                                                )}
                                                 <Button
                                                   size="sm"
                                                   variant="destructive"
@@ -1570,6 +1577,20 @@ export function SolicitacoesPageContent() {
                                             : "Ainda sem avaliações"}
                                           <span> • {resposta.TOTAL_AVALIACOES ?? 0} voto(s)</span>
                                         </div>
+                                      </div>
+                                      
+                                      {/* Comentários da resposta */}
+                                      <div className="mt-4 pt-3 border-t">
+                                        <Comentarios 
+                                          idResposta={resposta.RES_IDRESPOSTA}
+                                          idDuvida={request.id}
+                                          idAutorDuvida={(() => {
+                                            const duvida = requests.find(r => r.id === request.id)
+                                            return duvida?.author?.isCurrentUser 
+                                              ? (typeof user?.USU_ID === 'string' ? parseInt(user.USU_ID) : user?.USU_ID || 0)
+                                              : 0
+                                          })()}
+                                        />
                                       </div>
                                     </div>
                                         )
@@ -1715,7 +1736,7 @@ export function SolicitacoesPageContent() {
   )
 }
 
-export default function SolicitacoesPage() {
+function SolicitacoesPageRedirect() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -1727,4 +1748,12 @@ export default function SolicitacoesPage() {
   }, [router, searchParams])
 
   return null
+}
+
+export default function SolicitacoesPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <SolicitacoesPageRedirect />
+    </Suspense>
+  )
 }

@@ -24,21 +24,19 @@ export async function POST(req: NextRequest) {
 		const pool = await getPool()
 
 		// Garantir que a resposta existe e verificar se o usuário não é o autor
-		const respostaCheck = pool.request()
-		respostaCheck.input('RESPOSTA_ID', respostaId)
-		const respostaRes = await respostaCheck.query<{ RES_IDRESPOSTA: number; RES_IDUSUARIO: number }>(`
-      SELECT RES_IDRESPOSTA, RES_IDUSUARIO
-      FROM RESPOSTA
-      WHERE RES_IDRESPOSTA = @RESPOSTA_ID
-    `)
+		const respostaRes = await pool.query(`
+      SELECT res_idresposta, res_idusuario
+      FROM resposta
+      WHERE res_idresposta = $1
+    `, [respostaId])
 
-		if (!respostaRes.recordset[0]) {
+		if (!respostaRes.rows[0]) {
 			return NextResponse.json({ ok: false, error: 'Resposta não encontrada' }, { status: 404 })
 		}
 
 		// BLOQUEAR: Usuário não pode avaliar sua própria resposta
-		const resposta = respostaRes.recordset[0]
-		if (resposta.RES_IDUSUARIO === usuarioId) {
+		const resposta = respostaRes.rows[0]
+		if (resposta.res_idusuario === usuarioId) {
 			return NextResponse.json(
 				{ ok: false, error: 'Você não pode avaliar sua própria resposta' },
 				{ status: 403 },
@@ -46,78 +44,56 @@ export async function POST(req: NextRequest) {
 		}
 
 	// Verificar se o usuário já avaliou esta resposta
-	const checkReq = pool.request()
-	checkReq.input('RESPOSTA_ID', respostaId)
-	checkReq.input('USUARIO_ID', usuarioId)
-	
-	const checkRes = await checkReq.query<{ AVA_ID: number }>(`
-      SELECT AVA_ID
-      FROM AVALIACAORESPOSTA 
-      WHERE AVA_IDRESPOSTA = @RESPOSTA_ID AND AVA_IDUSUARIO = @USUARIO_ID
-    `)
+	const checkRes = await pool.query(`
+      SELECT ava_id
+      FROM avaliacaoresposta 
+      WHERE ava_idresposta = $1 AND ava_idusuario = $2
+    `, [respostaId, usuarioId])
 
-	const jaAvaliou = checkRes.recordset.length > 0
+	const jaAvaliou = checkRes.rows.length > 0
 
 	if (jaAvaliou) {
 		// Atualizar a avaliação existente
-		const updateReq = pool.request()
-		updateReq.input('RESPOSTA_ID', respostaId)
-		updateReq.input('USUARIO_ID', usuarioId)
-		updateReq.input('ESTRELA', ratingValue)
-
-		await updateReq.query(`
-        UPDATE AVALIACAORESPOSTA
-        SET AVA_ESTRELA = @ESTRELA
-        WHERE AVA_IDRESPOSTA = @RESPOSTA_ID AND AVA_IDUSUARIO = @USUARIO_ID
-      `)
+		await pool.query(`
+        UPDATE avaliacaoresposta
+        SET ava_estrela = $1
+        WHERE ava_idresposta = $2 AND ava_idusuario = $3
+      `, [ratingValue, respostaId, usuarioId])
 	} else {
 		// Inserir nova avaliação
-		const insertReq = pool.request()
-		insertReq.input('RESPOSTA_ID', respostaId)
-		insertReq.input('USUARIO_ID', usuarioId)
-		insertReq.input('ESTRELA', ratingValue)
-
-		await insertReq.query(`
-        INSERT INTO AVALIACAORESPOSTA (
-          AVA_IDRESPOSTA,
-          AVA_IDUSUARIO,
-          AVA_ESTRELA
+		await pool.query(`
+        INSERT INTO avaliacaoresposta (
+          ava_idresposta,
+          ava_idusuario,
+          ava_estrela
         )
-        VALUES (
-          @RESPOSTA_ID,
-          @USUARIO_ID,
-          @ESTRELA
-        )
-      `)
+        VALUES ($1, $2, $3)
+      `, [respostaId, usuarioId, ratingValue])
 	}
 
-		const statsReq = pool.request()
-		statsReq.input('RESPOSTA_ID', respostaId)
-		statsReq.input('USUARIO_ID', usuarioId)
-
-		const statsRes = await statsReq.query<{
-			MEDIA_AVALIACAO: number | null
-			TOTAL_AVALIACOES: number
-			USUARIO_AVALIACAO: number | null
-		}>(`
+		const statsRes = await pool.query(`
       SELECT 
         -- Excluir autoavaliações do cálculo (avaliador não pode ser o autor da resposta)
-        (SELECT AVG(CAST(A.AVA_ESTRELA AS FLOAT)) 
-         FROM AVALIACAORESPOSTA A
-         INNER JOIN RESPOSTA R_AUX ON A.AVA_IDRESPOSTA = R_AUX.RES_IDRESPOSTA
-         WHERE A.AVA_IDRESPOSTA = @RESPOSTA_ID 
-           AND A.AVA_IDUSUARIO != R_AUX.RES_IDUSUARIO) AS MEDIA_AVALIACAO,
+        (SELECT AVG(a.ava_estrela::float) 
+         FROM avaliacaoresposta a
+         INNER JOIN resposta r_aux ON a.ava_idresposta = r_aux.res_idresposta
+         WHERE a.ava_idresposta = $1 
+           AND a.ava_idusuario != r_aux.res_idusuario) AS media_avaliacao,
         (SELECT COUNT(*) 
-         FROM AVALIACAORESPOSTA A
-         INNER JOIN RESPOSTA R_AUX ON A.AVA_IDRESPOSTA = R_AUX.RES_IDRESPOSTA
-         WHERE A.AVA_IDRESPOSTA = @RESPOSTA_ID 
-           AND A.AVA_IDUSUARIO != R_AUX.RES_IDUSUARIO) AS TOTAL_AVALIACOES,
-        (SELECT TOP 1 AVA_ESTRELA FROM AVALIACAORESPOSTA WHERE AVA_IDRESPOSTA = @RESPOSTA_ID AND AVA_IDUSUARIO = @USUARIO_ID) AS USUARIO_AVALIACAO
-    `)
+         FROM avaliacaoresposta a
+         INNER JOIN resposta r_aux ON a.ava_idresposta = r_aux.res_idresposta
+         WHERE a.ava_idresposta = $1 
+           AND a.ava_idusuario != r_aux.res_idusuario) AS total_avaliacoes,
+        (SELECT ava_estrela FROM avaliacaoresposta WHERE ava_idresposta = $1 AND ava_idusuario = $2 LIMIT 1) AS usuario_avaliacao
+    `, [respostaId, usuarioId])
 
 		return NextResponse.json({
 			ok: true,
-			stats: statsRes.recordset[0],
+			stats: {
+				MEDIA_AVALIACAO: statsRes.rows[0].media_avaliacao,
+				TOTAL_AVALIACOES: statsRes.rows[0].total_avaliacoes,
+				USUARIO_AVALIACAO: statsRes.rows[0].usuario_avaliacao
+			},
 			updated: jaAvaliou,
 		})
 	} catch (err) {

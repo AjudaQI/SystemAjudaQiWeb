@@ -14,16 +14,14 @@ export async function GET(req: NextRequest) {
 
     const usuarioId = Number(usuarioIdParam)
     const pool = await getPool()
-    const request = pool.request()
-    request.input('USU_ID', usuarioId)
 
-    const result = await request.query<{ qtd_duvidas: number }>(`
+    const result = await pool.query(`
       SELECT COUNT(*) AS qtd_duvidas 
-      FROM DUVIDA D
-      WHERE D.DUV_IDUSUARIO = @USU_ID
-    `)
+      FROM duvida d
+      WHERE d.duv_idusuario = $1
+    `, [usuarioId])
 
-    const qtdDuvidas = result.recordset[0]?.qtd_duvidas || 0
+    const qtdDuvidas = result.rows[0]?.qtd_duvidas || 0
 
     return NextResponse.json({
       ok: true,

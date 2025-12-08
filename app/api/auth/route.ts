@@ -10,47 +10,60 @@ export async function POST(req: Request) {
     }
 
     const pool = await getPool()
-    const requestDb = pool.request()
-    requestDb.input('USU_EMAIL', email)
-    const resUser = await requestDb.query(`
+    const resUser = await pool.query(`
       SELECT 
-        USU_ID, 
-        USU_NOME, 
-        USU_EMAIL, 
-        USU_SENHA, 
-        USU_ATIVO, 
-        USU_IDPERMISSAO,
-        USU_IDCURSO,
-        USU_IDPERIODO,
-        USU_AVALIACAO
+        usu_id, 
+        usu_nome, 
+        usu_email, 
+        usu_matricula,
+        usu_senha, 
+        usu_ativo, 
+        usu_idpermissao,
+        usu_idcurso,
+        usu_idperiodo,
+        usu_avaliacao
       FROM USUARIO 
-      WHERE USU_EMAIL = @USU_EMAIL
-    `)
-    const user = resUser.recordset[0]
-    if (!user) {
+      WHERE usu_email = $1
+    `, [email])
+    
+    const userRow = resUser.rows[0]
+    if (!userRow) {
       return NextResponse.json({ ok: false, error: 'Usuário ou senha inválidos.' }, { status: 401 })
+    }
+
+    // Converter nomes de colunas para maiúsculas (compatibilidade)
+    const user: any = {
+      USU_ID: userRow.usu_id,
+      USU_NOME: userRow.usu_nome,
+      USU_EMAIL: userRow.usu_email,
+      USU_MATRICULA: userRow.usu_matricula,
+      USU_SENHA: userRow.usu_senha,
+      USU_ATIVO: userRow.usu_ativo,
+      USU_IDPERMISSAO: userRow.usu_idpermissao,
+      USU_IDCURSO: userRow.usu_idcurso,
+      USU_IDPERIODO: userRow.usu_idperiodo,
+      USU_AVALIACAO: userRow.usu_avaliacao
     }
 
     // Buscar descrição do curso e período se existirem
     if (user.USU_IDCURSO !== null && user.USU_IDCURSO !== undefined) {
-      const cursoRes = await requestDb.query(`
-        SELECT CUR_DESC FROM CURSO WHERE CUR_ID = ${user.USU_IDCURSO}
-      `)
-      user.USU_CURSO_DESC = cursoRes.recordset[0]?.CUR_DESC || null
+      const cursoRes = await pool.query(`
+        SELECT cur_desc FROM CURSO WHERE cur_id = $1
+      `, [user.USU_IDCURSO])
+      user.USU_CURSO_DESC = cursoRes.rows[0]?.cur_desc || null
     }
 
     if (user.USU_IDPERIODO !== null && user.USU_IDPERIODO !== undefined) {
-      const periodoRes = await requestDb.query(`
-        SELECT PER_DESCRICAO FROM PERIODO WHERE PER_ID = ${user.USU_IDPERIODO}
-      `)
-      user.USU_PERIODO_DESC = periodoRes.recordset[0]?.PER_DESCRICAO || null
+      const periodoRes = await pool.query(`
+        SELECT per_descricao FROM PERIODO WHERE per_id = $1
+      `, [user.USU_IDPERIODO])
+      user.USU_PERIODO_DESC = periodoRes.rows[0]?.per_descricao || null
     }
 
     // Gerar hash da senha fornecida no mesmo formato usado no cadastro (hex)
     const hash = crypto.createHash('sha512').update(senha).digest('hex')
     
-    // USU_SENHA é armazenado como VARBINARY no banco
-    // O driver mssql geralmente retorna VARBINARY como Buffer
+    // USU_SENHA é armazenado como BYTEA no banco PostgreSQL
     let storedHash: string
     if (!user.USU_SENHA) {
       return NextResponse.json({ ok: false, error: 'Usuário ou senha inválidos.' }, { status: 401 })
@@ -70,7 +83,7 @@ export async function POST(req: Request) {
     if (hash !== storedHash) {
       return NextResponse.json({ ok: false, error: 'Usuário ou senha inválidos.' }, { status: 401 })
     }
-    if (user.USU_ATIVO !== 1 && user.USU_ATIVO !== true) {
+    if (!user.USU_ATIVO) {
       return NextResponse.json({ ok: false, error: 'Usuário inativo.' }, { status: 403 })
     }
     // Nunca envie USU_SENHA para o front

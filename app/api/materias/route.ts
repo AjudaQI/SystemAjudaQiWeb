@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { mapColumnsToUpperCase } from '@/lib/pg-helpers'
 
 // GET - Buscar matérias
 export async function GET(req: NextRequest) {
@@ -9,45 +10,49 @@ export async function GET(req: NextRequest) {
     const periodoId = searchParams.get('periodoId')
 
     const pool = await getPool()
-    const request = pool.request()
 
     let query = `
       SELECT 
-        M.MAT_ID,
-        M.MAT_DESC,
-        M.MAT_IDCURSO,
-        M.MAT_IDPERIODO,
-        M.MAT_DESCRICAOCONTEUDO,
-        P.PER_DESCRICAO,
-        C.CUR_DESC
-      FROM MATERIA M
-      LEFT JOIN PERIODO P ON M.MAT_IDPERIODO = P.PER_ID
-      LEFT JOIN CURSO C ON M.MAT_IDCURSO = C.CUR_ID
+        m.mat_id,
+        m.mat_desc,
+        m.mat_idcurso,
+        m.mat_idperiodo,
+        m.mat_descricaoconteudo,
+        p.per_descricao,
+        c.cur_desc
+      FROM materia m
+      LEFT JOIN periodo p ON m.mat_idperiodo = p.per_id
+      LEFT JOIN curso c ON m.mat_idcurso = c.cur_id
       WHERE 1=1
     `
 
+    const params: any[] = []
+    let paramCount = 1
+
     if (cursoId) {
-      request.input('MAT_IDCURSO', parseInt(cursoId))
-      query += ` AND M.MAT_IDCURSO = @MAT_IDCURSO`
+      query += ` AND m.mat_idcurso = $${paramCount}`
+      params.push(parseInt(cursoId))
+      paramCount++
     }
 
     if (periodoId) {
-      request.input('MAT_IDPERIODO', parseInt(periodoId))
-      query += ` AND M.MAT_IDPERIODO = @MAT_IDPERIODO`
+      query += ` AND m.mat_idperiodo = $${paramCount}`
+      params.push(parseInt(periodoId))
+      paramCount++
     }
 
-    query += ` ORDER BY M.MAT_IDPERIODO, M.MAT_DESC`
+    query += ` ORDER BY m.mat_idperiodo, m.mat_desc`
 
     console.log('Query de matérias:', query)
     console.log('Parâmetros:', { cursoId, periodoId })
     
-    const materias = await request.query(query)
+    const materias = await pool.query(query, params)
 
-    console.log('Matérias encontradas:', materias.recordset.length)
+    console.log('Matérias encontradas:', materias.rows.length)
 
     return NextResponse.json({
       ok: true,
-      materias: materias.recordset
+      materias: materias.rows.map(mapColumnsToUpperCase)
     })
   } catch (err) {
     console.error('Erro ao buscar matérias:', err)
@@ -85,24 +90,16 @@ export async function POST(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
 
-    request.input('MAT_DESC', descricao.trim())
-    request.input('MAT_IDCURSO', parseInt(idCurso))
-    request.input('MAT_IDPERIODO', parseInt(idPeriodo))
-    request.input('MAT_DESCRICAOCONTEUDO', descricaoConteudo ? descricaoConteudo.trim() : null)
-
-    const insertQuery = `
-      INSERT INTO MATERIA (MAT_DESC, MAT_IDCURSO, MAT_IDPERIODO, MAT_DESCRICAOCONTEUDO)
-      OUTPUT INSERTED.MAT_ID, INSERTED.MAT_DESC, INSERTED.MAT_IDCURSO, INSERTED.MAT_IDPERIODO, INSERTED.MAT_DESCRICAOCONTEUDO
-      VALUES (@MAT_DESC, @MAT_IDCURSO, @MAT_IDPERIODO, @MAT_DESCRICAOCONTEUDO)
-    `
-
-    const insertResult = await request.query(insertQuery)
+    const insertResult = await pool.query(`
+      INSERT INTO materia (mat_desc, mat_idcurso, mat_idperiodo, mat_descricaoconteudo)
+      VALUES ($1, $2, $3, $4)
+      RETURNING mat_id, mat_desc, mat_idcurso, mat_idperiodo, mat_descricaoconteudo
+    `, [descricao.trim(), parseInt(idCurso), parseInt(idPeriodo), descricaoConteudo ? descricaoConteudo.trim() : null])
 
     return NextResponse.json({
       ok: true,
-      materia: insertResult.recordset[0],
+      materia: mapColumnsToUpperCase(insertResult.rows[0]),
       message: 'Matéria criada com sucesso!'
     })
   } catch (err) {
@@ -148,27 +145,18 @@ export async function PUT(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
 
-    request.input('MAT_ID', parseInt(id))
-    request.input('MAT_DESC', descricao.trim())
-    request.input('MAT_IDCURSO', parseInt(idCurso))
-    request.input('MAT_IDPERIODO', parseInt(idPeriodo))
-    request.input('MAT_DESCRICAOCONTEUDO', descricaoConteudo ? descricaoConteudo.trim() : null)
+    const result = await pool.query(`
+      UPDATE materia
+      SET mat_desc = $1,
+          mat_idcurso = $2,
+          mat_idperiodo = $3,
+          mat_descricaoconteudo = $4
+      WHERE mat_id = $5
+      RETURNING mat_id, mat_desc, mat_idcurso, mat_idperiodo, mat_descricaoconteudo
+    `, [descricao.trim(), parseInt(idCurso), parseInt(idPeriodo), descricaoConteudo ? descricaoConteudo.trim() : null, parseInt(id)])
 
-    const updateQuery = `
-      UPDATE MATERIA
-      SET MAT_DESC = @MAT_DESC,
-          MAT_IDCURSO = @MAT_IDCURSO,
-          MAT_IDPERIODO = @MAT_IDPERIODO,
-          MAT_DESCRICAOCONTEUDO = @MAT_DESCRICAOCONTEUDO
-      OUTPUT INSERTED.MAT_ID, INSERTED.MAT_DESC, INSERTED.MAT_IDCURSO, INSERTED.MAT_IDPERIODO, INSERTED.MAT_DESCRICAOCONTEUDO
-      WHERE MAT_ID = @MAT_ID
-    `
-
-    const result = await request.query(updateQuery)
-
-    if (result.recordset.length === 0) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { ok: false, error: 'Matéria não encontrada.' },
         { status: 404 }
@@ -177,7 +165,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      materia: result.recordset[0],
+      materia: mapColumnsToUpperCase(result.rows[0]),
       message: 'Matéria atualizada com sucesso!'
     })
   } catch (err) {
@@ -203,17 +191,13 @@ export async function DELETE(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
-
-    request.input('MAT_ID', parseInt(id))
 
     // Verifica se existem dúvidas vinculadas à matéria
-    const checkQuery = `
-      SELECT COUNT(*) as total FROM DUVIDA WHERE DUV_IDMATERIA = @MAT_ID
-    `
-    const checkResult = await request.query(checkQuery)
+    const checkResult = await pool.query(`
+      SELECT COUNT(*) as total FROM duvida WHERE duv_idmateria = $1
+    `, [parseInt(id)])
 
-    if (checkResult.recordset[0].total > 0) {
+    if (checkResult.rows[0].total > 0) {
       return NextResponse.json(
         { ok: false, error: 'Não é possível excluir uma matéria que possui dúvidas vinculadas.' },
         { status: 409 }
@@ -221,11 +205,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Exclui a matéria
-    const deleteQuery = `
-      DELETE FROM MATERIA WHERE MAT_ID = @MAT_ID
-    `
-
-    await request.query(deleteQuery)
+    await pool.query(`
+      DELETE FROM materia WHERE mat_id = $1
+    `, [parseInt(id)])
 
     return NextResponse.json({
       ok: true,
