@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CoursesManagement } from "@/components/courses-management"
+import { MateriasManagement } from "@/components/materias-management"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,7 +35,7 @@ interface User {
   USU_IDPERMISSAO: number
   USU_IDCURSO?: number
   USU_IDPERIODO?: number
-  USU_ATIVO: number
+  USU_ATIVO: boolean
   CUR_DESC?: string
   PER_DESCRICAO?: string
   PU_NOMEPERMISSAO?: string
@@ -71,9 +72,12 @@ function AdminPageContent() {
 
   // Estados para gerenciamento de usuários
   const [showUserDialog, setShowUserDialog] = useState(false)
-  const [dialogMode, setDialogMode] = useState<"view">("view")
+  const [dialogMode, setDialogMode] = useState<"view" | "edit">("view")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [userForm, setUserForm] = useState<Partial<User>>({})
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<number | null>(null)
+  const [permissoes, setPermissoes] = useState<Array<{PU_IDPERMISSAO: number, PU_NOMEPERMISSAO: string}>>([])
 
   useEffect(() => {
     if (currentUser) {
@@ -99,6 +103,15 @@ function AdminPageContent() {
         }))
       }
 
+      // Buscar permissões
+      const permissoesRes = await fetch('/api/periodos') // Vamos criar endpoint específico
+      // Por enquanto, vamos usar valores fixos baseados no seed
+      setPermissoes([
+        { PU_IDPERMISSAO: 1, PU_NOMEPERMISSAO: 'Aluno' },
+        { PU_IDPERMISSAO: 2, PU_NOMEPERMISSAO: 'Administrador' },
+        { PU_IDPERMISSAO: 3, PU_NOMEPERMISSAO: 'Monitor' }
+      ])
+
       setReports([])
     } catch (error) {
       console.error("Erro ao buscar dados:", error)
@@ -122,21 +135,126 @@ function AdminPageContent() {
   }
 
   const handleEditUser = (user: User) => {
-    toast({
-      title: "Em desenvolvimento",
-      description: "Função de edição em desenvolvimento.",
-    })
+    setDialogMode("edit")
+    setSelectedUser(user)
+    setUserForm(user)
+    setShowUserDialog(true)
+  }
+
+  const handleSaveUser = async () => {
+    if (!selectedUser) return
+
+    try {
+      const response = await fetch('/api/usuarios', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: typeof selectedUser.USU_ID === 'string' ? parseInt(selectedUser.USU_ID) : selectedUser.USU_ID,
+          idPermissao: typeof userForm.USU_IDPERMISSAO === 'string' ? parseInt(userForm.USU_IDPERMISSAO as string) : userForm.USU_IDPERMISSAO
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.ok) {
+        toast({
+          title: "Sucesso",
+          description: "Permissão do usuário atualizada com sucesso!"
+        })
+        setShowUserDialog(false)
+        fetchData()
+      } else {
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao atualizar usuário.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar usuário:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar usuário.",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleDeleteUser = (userId: number) => {
-    toast({
-      title: "Em desenvolvimento",
-      description: "Função de exclusão em desenvolvimento.",
-    })
+    setUserToDelete(userId)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return
+
+    try {
+      const response = await fetch(`/api/usuarios?id=${userToDelete}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+
+      if (data.ok) {
+        toast({
+          title: "Sucesso",
+          description: "Usuário excluído com sucesso!"
+        })
+        setShowDeleteDialog(false)
+        setUserToDelete(null)
+        fetchData()
+      } else {
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao excluir usuário.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao excluir usuário:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao excluir usuário.",
+        variant: "destructive"
+      })
+    }
   }
 
   if (!currentUser) {
     return <div>Carregando...</div>
+  }
+
+  // Verificar se o usuário é administrador (ID 2)
+  const isAdmin = currentUser.USU_IDPERMISSAO === 2
+
+  if (!isAdmin) {
+    return (
+      <div className={perfilStyles.container}>
+        <div className={perfilStyles.background}>
+          <div className={perfilStyles.gradient1}></div>
+          <div className={perfilStyles.gradient2}></div>
+          <div className={perfilStyles.gradient3}></div>
+        </div>
+        <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+        <main className={perfilStyles.main}>
+          <div className={perfilStyles.content}>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Acesso Negado</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-ajudaqi-text-secondary">
+                    Você não tem permissão para acessar esta área. 
+                    Apenas administradores podem gerenciar o sistema.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   if (loading) {
@@ -189,10 +307,10 @@ function AdminPageContent() {
             {/* Header */}
             <div>
               <h1 className="text-3xl font-bold text-ajudaqi-text">
-                Painel {currentUser.role === "master" ? "Master" : "Administrativo"}
+                Painel Administrativo
               </h1>
               <p className="text-ajudaqi-text-secondary">
-                {currentUser.role === "master" ? "Controle total da plataforma Ajudaqi" : "Gerenciamento do seu curso"}
+                Gerenciamento completo da plataforma Ajudaqi
               </p>
             </div>
 
@@ -241,14 +359,11 @@ function AdminPageContent() {
 
             {/* Tabs */}
             <Tabs defaultValue="users" className="space-y-4">
-              <TabsList className={`grid w-full ${currentUser.role === "master" ? "grid-cols-3" : "grid-cols-2"}`}>
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="users">Usuários</TabsTrigger>
-                <TabsTrigger value="courses">Cursos & Matérias</TabsTrigger>
-                {currentUser.role === "master" && (
-                  <TabsTrigger value="reports">
-                    Denúncias
-                  </TabsTrigger>
-                )}
+                <TabsTrigger value="courses">Cursos</TabsTrigger>
+                <TabsTrigger value="materias">Matérias</TabsTrigger>
+                <TabsTrigger value="reports">Denúncias</TabsTrigger>
               </TabsList>
 
               <TabsContent value="users" className="space-y-4">
@@ -314,8 +429,8 @@ function AdminPageContent() {
                               <TableCell>
                                 {user.PU_NOMEPERMISSAO ? (
                                   <Badge 
-                                    variant={user.USU_IDPERMISSAO === 4 ? "default" : "secondary"}
-                                    className={user.USU_IDPERMISSAO === 4 ? "bg-ajudaqi-blue" : ""}
+                                    variant={user.USU_IDPERMISSAO === 2 ? "default" : "secondary"}
+                                    className={user.USU_IDPERMISSAO === 2 ? "bg-ajudaqi-blue" : ""}
                                   >
                                     {user.PU_NOMEPERMISSAO}
                                   </Badge>
@@ -324,8 +439,8 @@ function AdminPageContent() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={user.USU_ATIVO === 1 ? "default" : "secondary"}>
-                                  {user.USU_ATIVO === 1 ? "Ativo" : "Inativo"}
+                                <Badge variant={user.USU_ATIVO ? "default" : "secondary"}>
+                                  {user.USU_ATIVO ? "Ativo" : "Inativo"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
@@ -359,8 +474,11 @@ function AdminPageContent() {
                 <CoursesManagement currentUser={currentUser} />
               </TabsContent>
 
-              {currentUser.role === "master" && (
-                <TabsContent value="reports" className="space-y-4">
+              <TabsContent value="materias" className="space-y-4">
+                <MateriasManagement />
+              </TabsContent>
+
+              <TabsContent value="reports" className="space-y-4">
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center space-x-2">
@@ -424,18 +542,19 @@ function AdminPageContent() {
                             ))}
                           </TableBody>
                         </Table>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              )}
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
 
             {/* Modal de Usuário */}
             <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                  <DialogTitle>Detalhes do Usuário</DialogTitle>
+                  <DialogTitle>
+                    {dialogMode === "view" ? "Detalhes do Usuário" : "Editar Permissão do Usuário"}
+                  </DialogTitle>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
@@ -489,12 +608,30 @@ function AdminPageContent() {
                       Permissão
                     </Label>
                     <div className="col-span-3">
-                      <Badge 
-                        variant={selectedUser?.USU_IDPERMISSAO === 4 ? "default" : "secondary"}
-                        className={selectedUser?.USU_IDPERMISSAO === 4 ? "bg-ajudaqi-blue" : ""}
-                      >
-                        {selectedUser?.PU_NOMEPERMISSAO || `ID ${selectedUser?.USU_IDPERMISSAO}`}
-                      </Badge>
+                      {dialogMode === "edit" ? (
+                        <Select 
+                          value={userForm.USU_IDPERMISSAO?.toString()} 
+                          onValueChange={(value) => setUserForm({...userForm, USU_IDPERMISSAO: parseInt(value)})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a permissão" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {permissoes.map((permissao) => (
+                              <SelectItem key={permissao.PU_IDPERMISSAO} value={permissao.PU_IDPERMISSAO.toString()}>
+                                {permissao.PU_NOMEPERMISSAO}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge 
+                          variant={selectedUser?.USU_IDPERMISSAO === 2 ? "default" : "secondary"}
+                          className={selectedUser?.USU_IDPERMISSAO === 2 ? "bg-ajudaqi-blue" : ""}
+                        >
+                          {selectedUser?.PU_NOMEPERMISSAO || `ID ${selectedUser?.USU_IDPERMISSAO}`}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -503,15 +640,44 @@ function AdminPageContent() {
                       Status
                     </Label>
                     <div className="col-span-3">
-                      <Badge variant={selectedUser?.USU_ATIVO === 1 ? "default" : "secondary"}>
-                        {selectedUser?.USU_ATIVO === 1 ? "Ativo" : "Inativo"}
+                      <Badge variant={selectedUser?.USU_ATIVO ? "default" : "secondary"}>
+                        {selectedUser?.USU_ATIVO ? "Ativo" : "Inativo"}
                       </Badge>
                     </div>
                   </div>
                 </div>
 
                 <DialogFooter>
-                  <Button onClick={() => setShowUserDialog(false)}>Fechar</Button>
+                  {dialogMode === "edit" ? (
+                    <>
+                      <Button variant="outline" onClick={() => setShowUserDialog(false)}>Cancelar</Button>
+                      <Button onClick={handleSaveUser}>Salvar Alterações</Button>
+                    </>
+                  ) : (
+                    <Button onClick={() => setShowUserDialog(false)}>Fechar</Button>
+                  )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dialog de Confirmação de Exclusão */}
+            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+              <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                  <DialogTitle>Confirmar Exclusão</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <p className="text-sm text-ajudaqi-text-secondary">
+                    Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="destructive" onClick={confirmDeleteUser}>
+                    Excluir
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

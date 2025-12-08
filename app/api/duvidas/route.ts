@@ -15,30 +15,24 @@ export async function POST(req: NextRequest) {
     const pool = await getPool()
 
     // 1. Buscar dados do usuário para obter o curso
-    const request0 = pool.request()
-    request0.input('USU_ID', usuarioId)
-    const usuarioRes = await request0.query<{ USU_IDCURSO: number | null }>(`
-      SELECT USU_IDCURSO 
-      FROM USUARIO 
-      WHERE USU_ID = @USU_ID AND USU_ATIVO = 1
-    `)
+    const usuarioRes = await pool.query(`
+      SELECT usu_idcurso 
+      FROM usuario 
+      WHERE usu_id = $1 AND usu_ativo = TRUE
+    `, [usuarioId])
 
-    if (!usuarioRes.recordset[0]) {
+    if (!usuarioRes.rows[0]) {
       return NextResponse.json(
         { ok: false, error: 'Usuário não encontrado ou inativo' },
         { status: 404 }
       )
     }
 
-    const cursoId = usuarioRes.recordset[0].USU_IDCURSO
-    // Se o usuário não tiver curso, ainda pode criar dúvida, mas precisa buscar a matéria sem filtro de curso
+    const cursoId = usuarioRes.rows[0].usu_idcurso
 
     // 2. Buscar PER_ID baseado no número do período
-    // Mapeamento: períodos 1-10 têm IDs 1-10, período 11 tem ID 15, período 12 tem ID 16
-    const request1 = pool.request()
     const periodoNumInt = parseInt(periodoNum)
     
-    // Mapear número do período para ID
     let periodoId: number
     if (periodoNumInt === 11) {
       periodoId = 15
@@ -47,34 +41,30 @@ export async function POST(req: NextRequest) {
     } else if (periodoNumInt >= 1 && periodoNumInt <= 10) {
       periodoId = periodoNumInt
     } else {
-      // Se não for um número válido, tentar buscar pela descrição
-      request1.input('PER_DESCRICAO', `${periodoNum}º Período`)
-      const periodoRes = await request1.query<{ PER_ID: number }>(`
-        SELECT PER_ID 
-        FROM PERIODO 
-        WHERE PER_DESCRICAO = @PER_DESCRICAO
-      `)
+      const periodoRes = await pool.query(`
+        SELECT per_id 
+        FROM periodo 
+        WHERE per_descricao = $1
+      `, [`${periodoNum}º Período`])
       
-      if (!periodoRes.recordset[0]) {
+      if (!periodoRes.rows[0]) {
         return NextResponse.json(
           { ok: false, error: 'Período não encontrado' },
           { status: 404 }
         )
       }
       
-      periodoId = periodoRes.recordset[0].PER_ID
+      periodoId = periodoRes.rows[0].per_id
     }
     
-    // Verificar se o período existe (sem verificar PER_ATIVO, pois todos estão ativos)
-    const request1b = pool.request()
-    request1b.input('PER_ID', periodoId)
-    const periodoRes = await request1b.query<{ PER_ID: number }>(`
-      SELECT PER_ID
-      FROM PERIODO 
-      WHERE PER_ID = @PER_ID
-    `)
+    // Verificar se o período existe
+    const periodoCheck = await pool.query(`
+      SELECT per_id
+      FROM periodo 
+      WHERE per_id = $1
+    `, [periodoId])
     
-    if (!periodoRes.recordset[0]) {
+    if (!periodoCheck.rows[0]) {
       return NextResponse.json(
         { ok: false, error: 'Período não encontrado' },
         { status: 404 }
@@ -82,84 +72,58 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Buscar MAT_ID baseado na descrição da matéria e período
-    // Primeiro tenta sem filtro de curso, depois com curso se disponível
-    const request2 = pool.request()
-    request2.input('MAT_DESC', materiaDesc)
-    request2.input('MAT_IDPERIODO', periodoId)
-    
     console.log('Buscando matéria:', { materiaDesc, periodoId, cursoId })
     
-    let materiaQuery = `
-      SELECT MAT_ID, MAT_DESC, MAT_IDPERIODO, MAT_IDCURSO
-      FROM MATERIA 
-      WHERE MAT_DESC = @MAT_DESC 
-        AND MAT_IDPERIODO = @MAT_IDPERIODO
-    `
+    const materiaRes = await pool.query(`
+      SELECT mat_id, mat_desc, mat_idperiodo, mat_idcurso
+      FROM materia 
+      WHERE mat_desc = $1 
+        AND mat_idperiodo = $2
+    `, [materiaDesc, periodoId])
     
-    // Não filtrar por curso inicialmente - buscar todas as matérias com esse nome e período
-    const materiaRes = await request2.query<{ MAT_ID: number, MAT_DESC: string, MAT_IDPERIODO: number, MAT_IDCURSO: number }>(materiaQuery)
-    
-    console.log('Matérias encontradas:', materiaRes.recordset.length, materiaRes.recordset)
+    console.log('Matérias encontradas:', materiaRes.rows.length, materiaRes.rows)
 
     let materiaId: number
     
-    if (!materiaRes.recordset[0]) {
-      // Se não encontrou, tentar buscar apenas por descrição e período (sem filtros adicionais)
-      const request2b = pool.request()
-      request2b.input('MAT_DESC', materiaDesc)
-      request2b.input('MAT_IDPERIODO', periodoId)
+    if (!materiaRes.rows[0]) {
+      const materiaRes2 = await pool.query(`
+        SELECT mat_id 
+        FROM materia 
+        WHERE mat_desc LIKE $1 
+          AND mat_idperiodo = $2
+      `, [materiaDesc, periodoId])
       
-      const materiaRes2 = await request2b.query<{ MAT_ID: number }>(`
-        SELECT MAT_ID 
-        FROM MATERIA 
-        WHERE MAT_DESC LIKE @MAT_DESC 
-          AND MAT_IDPERIODO = @MAT_IDPERIODO
-      `)
-      
-      if (!materiaRes2.recordset[0]) {
+      if (!materiaRes2.rows[0]) {
         return NextResponse.json(
           { ok: false, error: `Matéria "${materiaDesc}" não encontrada para o período ${periodoNum} (PER_ID: ${periodoId})` },
           { status: 404 }
         )
       }
       
-      materiaId = materiaRes2.recordset[0].MAT_ID
+      materiaId = materiaRes2.rows[0].mat_id
     } else {
-      // Se encontrou múltiplas matérias e o usuário tem curso, preferir a do curso do usuário
-      if (materiaRes.recordset.length > 1 && cursoId) {
-        const materiaDoCurso = materiaRes.recordset.find(m => m.MAT_IDCURSO === cursoId)
-        materiaId = materiaDoCurso ? materiaDoCurso.MAT_ID : materiaRes.recordset[0].MAT_ID
+      if (materiaRes.rows.length > 1 && cursoId) {
+        const materiaDoCurso = materiaRes.rows.find(m => m.mat_idcurso === cursoId)
+        materiaId = materiaDoCurso ? materiaDoCurso.mat_id : materiaRes.rows[0].mat_id
       } else {
-        materiaId = materiaRes.recordset[0].MAT_ID
+        materiaId = materiaRes.rows[0].mat_id
       }
     }
 
     // 4. Inserir a dúvida
-    const request3 = pool.request()
-    request3.input('DUV_IDUSUARIO', usuarioId)
-    request3.input('DUV_IDMATERIA', materiaId)
-    request3.input('DUV_TITULO', titulo)
-    request3.input('DUV_DESCRICAO', descricao)
-
-    const insertRes = await request3.query<{ DUV_IDDUVIDA: number }>(`
-      INSERT INTO DUVIDA (
-        DUV_IDUSUARIO,
-        DUV_IDMATERIA,
-        DUV_TITULO,
-        DUV_DESCRICAO,
-        DUV_RESOLVIDA
+    const insertRes = await pool.query(`
+      INSERT INTO duvida (
+        duv_idusuario,
+        duv_idmateria,
+        duv_titulo,
+        duv_descricao,
+        duv_resolvida
       )
-      OUTPUT INSERTED.DUV_IDDUVIDA
-      VALUES (
-        @DUV_IDUSUARIO,
-        @DUV_IDMATERIA,
-        @DUV_TITULO,
-        @DUV_DESCRICAO,
-        0
-      )
-    `)
+      VALUES ($1, $2, $3, $4, FALSE)
+      RETURNING duv_idduvida
+    `, [usuarioId, materiaId, titulo, descricao])
 
-    const duvidaId = insertRes.recordset[0]?.DUV_IDDUVIDA
+    const duvidaId = insertRes.rows[0]?.duv_idduvida
 
     return NextResponse.json({
       ok: true,
@@ -178,36 +142,49 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const pool = await getPool()
-    const request = pool.request()
 
-    const duvidas = await request.query(`
+    const duvidas = await pool.query(`
       SELECT 
-        D.DUV_IDDUVIDA,
-        D.DUV_TITULO,
-        D.DUV_DESCRICAO,
-        D.DUV_DATADUVIDA,
-        D.DUV_RESOLVIDA,
-        D.DUV_IDUSUARIO,
-        D.DUV_IDMATERIA,
-        M.MAT_DESC,
-        PM.PER_DESCRICAO AS MATERIA_PERIODO_DESC,
-        U.USU_NOME,
-        U.USU_EMAIL,
-        CU.CUR_DESC AS USUARIO_CURSO_DESC,
-        PU.PER_DESCRICAO AS USUARIO_PERIODO_DESC
-      FROM DUVIDA D
-      INNER JOIN MATERIA M ON D.DUV_IDMATERIA = M.MAT_ID
-      INNER JOIN PERIODO PM ON M.MAT_IDPERIODO = PM.PER_ID
-      INNER JOIN USUARIO U ON D.DUV_IDUSUARIO = U.USU_ID
-      LEFT JOIN CURSO CU ON U.USU_IDCURSO = CU.CUR_ID
-      LEFT JOIN PERIODO PU ON U.USU_IDPERIODO = PU.PER_ID
-      WHERE U.USU_ATIVO = 1
-      ORDER BY D.DUV_DATADUVIDA DESC
+        d.duv_idduvida,
+        d.duv_titulo,
+        d.duv_descricao,
+        d.duv_dataduvida,
+        d.duv_resolvida,
+        d.duv_idusuario,
+        d.duv_idmateria,
+        m.mat_desc,
+        pm.per_descricao AS materia_periodo_desc,
+        u.usu_nome,
+        u.usu_email,
+        cu.cur_desc AS usuario_curso_desc,
+        pu.per_descricao AS usuario_periodo_desc
+      FROM duvida d
+      INNER JOIN materia m ON d.duv_idmateria = m.mat_id
+      INNER JOIN periodo pm ON m.mat_idperiodo = pm.per_id
+      INNER JOIN usuario u ON d.duv_idusuario = u.usu_id
+      LEFT JOIN curso cu ON u.usu_idcurso = cu.cur_id
+      LEFT JOIN periodo pu ON u.usu_idperiodo = pu.per_id
+      WHERE u.usu_ativo = TRUE
+      ORDER BY d.duv_dataduvida DESC
     `)
 
     return NextResponse.json({
       ok: true,
-      duvidas: duvidas.recordset
+      duvidas: duvidas.rows.map(row => ({
+        DUV_IDDUVIDA: row.duv_idduvida,
+        DUV_TITULO: row.duv_titulo,
+        DUV_DESCRICAO: row.duv_descricao,
+        DUV_DATADUVIDA: row.duv_dataduvida,
+        DUV_RESOLVIDA: row.duv_resolvida,
+        DUV_IDUSUARIO: row.duv_idusuario,
+        DUV_IDMATERIA: row.duv_idmateria,
+        MAT_DESC: row.mat_desc,
+        MATERIA_PERIODO_DESC: row.materia_periodo_desc,
+        USU_NOME: row.usu_nome,
+        USU_EMAIL: row.usu_email,
+        USUARIO_CURSO_DESC: row.usuario_curso_desc,
+        USUARIO_PERIODO_DESC: row.usuario_periodo_desc
+      }))
     })
   } catch (err) {
     console.error('Erro ao buscar dúvidas:', err)
@@ -232,29 +209,22 @@ export async function PUT(req: NextRequest) {
     const pool = await getPool()
 
     // Verificar se a dúvida existe e se pertence ao usuário
-    const checkReq = pool.request()
-    checkReq.input('DUV_IDDUVIDA', duvidaId)
-    const checkRes = await checkReq.query<{
-      DUV_IDDUVIDA: number
-      DUV_IDUSUARIO: number
-      DUV_IDMATERIA: number
-    }>(`
-      SELECT DUV_IDDUVIDA, DUV_IDUSUARIO, DUV_IDMATERIA
-      FROM DUVIDA
-      WHERE DUV_IDDUVIDA = @DUV_IDDUVIDA
-    `)
+    const checkRes = await pool.query(`
+      SELECT duv_idduvida, duv_idusuario, duv_idmateria
+      FROM duvida
+      WHERE duv_idduvida = $1
+    `, [duvidaId])
 
-    if (!checkRes.recordset[0]) {
+    if (!checkRes.rows[0]) {
       return NextResponse.json(
         { ok: false, error: 'Dúvida não encontrada' },
         { status: 404 }
       )
     }
 
-    // Verificar se a dúvida pertence ao usuário
-    const duvidaUsuarioId = typeof checkRes.recordset[0].DUV_IDUSUARIO === 'string'
-      ? parseInt(checkRes.recordset[0].DUV_IDUSUARIO, 10)
-      : Number(checkRes.recordset[0].DUV_IDUSUARIO)
+    const duvidaUsuarioId = typeof checkRes.rows[0].duv_idusuario === 'string'
+      ? parseInt(checkRes.rows[0].duv_idusuario, 10)
+      : Number(checkRes.rows[0].duv_idusuario)
     
     const usuarioIdNumber = typeof usuarioId === 'string' ? parseInt(usuarioId, 10) : Number(usuarioId)
 
@@ -266,25 +236,22 @@ export async function PUT(req: NextRequest) {
     }
 
     // Buscar dados do usuário para obter o curso
-    const request0 = pool.request()
-    request0.input('USU_ID', usuarioId)
-    const usuarioRes = await request0.query<{ USU_IDCURSO: number | null }>(`
-      SELECT USU_IDCURSO 
-      FROM USUARIO 
-      WHERE USU_ID = @USU_ID AND USU_ATIVO = 1
-    `)
+    const usuarioRes = await pool.query(`
+      SELECT usu_idcurso 
+      FROM usuario 
+      WHERE usu_id = $1 AND usu_ativo = TRUE
+    `, [usuarioId])
 
-    if (!usuarioRes.recordset[0]) {
+    if (!usuarioRes.rows[0]) {
       return NextResponse.json(
         { ok: false, error: 'Usuário não encontrado ou inativo' },
         { status: 404 }
       )
     }
 
-    const cursoId = usuarioRes.recordset[0].USU_IDCURSO
+    const cursoId = usuarioRes.rows[0].usu_idcurso
 
     // Buscar PER_ID baseado no número do período
-    const request1 = pool.request()
     const periodoNumInt = parseInt(periodoNum)
     
     let periodoId: number
@@ -295,80 +262,65 @@ export async function PUT(req: NextRequest) {
     } else if (periodoNumInt >= 1 && periodoNumInt <= 10) {
       periodoId = periodoNumInt
     } else {
-      request1.input('PER_DESCRICAO', `${periodoNum}º Período`)
-      const periodoRes = await request1.query<{ PER_ID: number }>(`
-        SELECT PER_ID 
-        FROM PERIODO 
-        WHERE PER_DESCRICAO = @PER_DESCRICAO
-      `)
+      const periodoRes = await pool.query(`
+        SELECT per_id 
+        FROM periodo 
+        WHERE per_descricao = $1
+      `, [`${periodoNum}º Período`])
       
-      if (!periodoRes.recordset[0]) {
+      if (!periodoRes.rows[0]) {
         return NextResponse.json(
           { ok: false, error: 'Período não encontrado' },
           { status: 404 }
         )
       }
       
-      periodoId = periodoRes.recordset[0].PER_ID
+      periodoId = periodoRes.rows[0].per_id
     }
 
     // Buscar MAT_ID baseado na descrição da matéria e período
-    const request2 = pool.request()
-    request2.input('MAT_DESC', materiaDesc)
-    request2.input('MAT_IDPERIODO', periodoId)
-    
-    const materiaRes = await request2.query<{ MAT_ID: number, MAT_DESC: string, MAT_IDPERIODO: number, MAT_IDCURSO: number }>(`
-      SELECT MAT_ID, MAT_DESC, MAT_IDPERIODO, MAT_IDCURSO
-      FROM MATERIA 
-      WHERE MAT_DESC = @MAT_DESC 
-        AND MAT_IDPERIODO = @MAT_IDPERIODO
-    `)
+    const materiaRes = await pool.query(`
+      SELECT mat_id, mat_desc, mat_idperiodo, mat_idcurso
+      FROM materia 
+      WHERE mat_desc = $1 
+        AND mat_idperiodo = $2
+    `, [materiaDesc, periodoId])
 
     let materiaId: number
     
-    if (!materiaRes.recordset[0]) {
-      const request2b = pool.request()
-      request2b.input('MAT_DESC', materiaDesc)
-      request2b.input('MAT_IDPERIODO', periodoId)
+    if (!materiaRes.rows[0]) {
+      const materiaRes2 = await pool.query(`
+        SELECT mat_id 
+        FROM materia 
+        WHERE mat_desc LIKE $1 
+          AND mat_idperiodo = $2
+      `, [materiaDesc, periodoId])
       
-      const materiaRes2 = await request2b.query<{ MAT_ID: number }>(`
-        SELECT MAT_ID 
-        FROM MATERIA 
-        WHERE MAT_DESC LIKE @MAT_DESC 
-          AND MAT_IDPERIODO = @MAT_IDPERIODO
-      `)
-      
-      if (!materiaRes2.recordset[0]) {
+      if (!materiaRes2.rows[0]) {
         return NextResponse.json(
           { ok: false, error: `Matéria "${materiaDesc}" não encontrada para o período ${periodoNum}` },
           { status: 404 }
         )
       }
       
-      materiaId = materiaRes2.recordset[0].MAT_ID
+      materiaId = materiaRes2.rows[0].mat_id
     } else {
-      if (materiaRes.recordset.length > 1 && cursoId) {
-        const materiaDoCurso = materiaRes.recordset.find(m => m.MAT_IDCURSO === cursoId)
-        materiaId = materiaDoCurso ? materiaDoCurso.MAT_ID : materiaRes.recordset[0].MAT_ID
+      if (materiaRes.rows.length > 1 && cursoId) {
+        const materiaDoCurso = materiaRes.rows.find(m => m.mat_idcurso === cursoId)
+        materiaId = materiaDoCurso ? materiaDoCurso.mat_id : materiaRes.rows[0].mat_id
       } else {
-        materiaId = materiaRes.recordset[0].MAT_ID
+        materiaId = materiaRes.rows[0].mat_id
       }
     }
 
     // Atualizar a dúvida
-    const updateReq = pool.request()
-    updateReq.input('DUV_IDDUVIDA', duvidaId)
-    updateReq.input('DUV_IDMATERIA', materiaId)
-    updateReq.input('DUV_TITULO', titulo)
-    updateReq.input('DUV_DESCRICAO', descricao)
-
-    await updateReq.query(`
-      UPDATE DUVIDA
-      SET DUV_IDMATERIA = @DUV_IDMATERIA,
-          DUV_TITULO = @DUV_TITULO,
-          DUV_DESCRICAO = @DUV_DESCRICAO
-      WHERE DUV_IDDUVIDA = @DUV_IDDUVIDA
-    `)
+    await pool.query(`
+      UPDATE duvida
+      SET duv_idmateria = $1,
+          duv_titulo = $2,
+          duv_descricao = $3
+      WHERE duv_idduvida = $4
+    `, [materiaId, titulo, descricao, duvidaId])
 
     return NextResponse.json({
       ok: true,
@@ -397,20 +349,13 @@ export async function DELETE(req: NextRequest) {
     const pool = await getPool()
 
     // Verificar se a dúvida existe e se pertence ao usuário
-    const checkReq = pool.request()
-    checkReq.input('DUV_IDDUVIDA', duvidaId)
-    checkReq.input('USU_ID', usuarioId)
+    const checkRes = await pool.query(`
+      SELECT duv_idduvida, duv_idusuario
+      FROM duvida
+      WHERE duv_idduvida = $1
+    `, [duvidaId])
 
-    const checkRes = await checkReq.query<{
-      DUV_IDDUVIDA: number
-      DUV_IDUSUARIO: number
-    }>(`
-      SELECT DUV_IDDUVIDA, DUV_IDUSUARIO
-      FROM DUVIDA
-      WHERE DUV_IDDUVIDA = @DUV_IDDUVIDA
-    `)
-
-    if (!checkRes.recordset[0]) {
+    if (!checkRes.rows[0]) {
       return NextResponse.json(
         { ok: false, error: 'Dúvida não encontrada' },
         { status: 404 }
@@ -418,9 +363,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Verificar se a dúvida pertence ao usuário
-    const duvidaUsuarioId = typeof checkRes.recordset[0].DUV_IDUSUARIO === 'string'
-      ? parseInt(checkRes.recordset[0].DUV_IDUSUARIO, 10)
-      : Number(checkRes.recordset[0].DUV_IDUSUARIO)
+    const duvidaUsuarioId = typeof checkRes.rows[0].duv_idusuario === 'string'
+      ? parseInt(checkRes.rows[0].duv_idusuario, 10)
+      : Number(checkRes.rows[0].duv_idusuario)
     
     const usuarioIdNumber = typeof usuarioId === 'string' ? parseInt(usuarioId, 10) : Number(usuarioId)
 
@@ -432,13 +377,10 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Excluir a dúvida (as respostas serão excluídas automaticamente devido ao CASCADE)
-    const deleteReq = pool.request()
-    deleteReq.input('DUV_IDDUVIDA', duvidaId)
-
-    await deleteReq.query(`
-      DELETE FROM DUVIDA
-      WHERE DUV_IDDUVIDA = @DUV_IDDUVIDA
-    `)
+    await pool.query(`
+      DELETE FROM duvida
+      WHERE duv_idduvida = $1
+    `, [duvidaId])
 
     return NextResponse.json({
       ok: true,

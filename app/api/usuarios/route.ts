@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { mapColumnsToUpperCase } from '@/lib/pg-helpers'
 import { z } from 'zod'
 import crypto from 'crypto'
 
@@ -7,34 +8,33 @@ import crypto from 'crypto'
 export async function GET(req: NextRequest) {
   try {
     const pool = await getPool()
-    const request = pool.request()
 
     const query = `
       SELECT 
-        U.USU_ID,
-        U.USU_MATRICULA,
-        U.USU_NOME,
-        U.USU_EMAIL,
-        U.USU_IDPERMISSAO,
-        U.USU_IDCURSO,
-        U.USU_IDPERIODO,
-        U.USU_ATIVO,
-        C.CUR_DESC,
-        P.PER_DESCRICAO,
-        PU.PU_NOMEPERMISSAO
-      FROM USUARIO U
-      LEFT JOIN CURSO C ON U.USU_IDCURSO = C.CUR_ID
-      LEFT JOIN PERIODO P ON U.USU_IDPERIODO = P.PER_ID
-      LEFT JOIN PERMISSAOUSUARIO PU ON U.USU_IDPERMISSAO = PU.PU_IDPERMISSAO
-      ORDER BY U.USU_NOME
+        u.usu_id,
+        u.usu_matricula,
+        u.usu_nome,
+        u.usu_email,
+        u.usu_idpermissao,
+        u.usu_idcurso,
+        u.usu_idperiodo,
+        u.usu_ativo,
+        c.cur_desc,
+        p.per_descricao,
+        pu.pu_nomepermissao
+      FROM usuario u
+      LEFT JOIN curso c ON u.usu_idcurso = c.cur_id
+      LEFT JOIN periodo p ON u.usu_idperiodo = p.per_id
+      LEFT JOIN permissaousuario pu ON u.usu_idpermissao = pu.pu_idpermissao
+      ORDER BY u.usu_nome
     `
 
-    const result = await request.query(query)
+    const result = await pool.query(query)
 
     return NextResponse.json({
       ok: true,
-      usuarios: result.recordset,
-      total: result.recordset.length
+      usuarios: result.rows.map(mapColumnsToUpperCase),
+      total: result.rows.length
     })
   } catch (err) {
     console.error('Erro ao buscar usuários:', err)
@@ -46,23 +46,17 @@ export async function GET(req: NextRequest) {
 }
 
 const fullSchema = z.object({
-	idPermissao: z.number().int().nonnegative().default(3),
+	idPermissao: z.number().int().positive().default(1),
 	matricula: z.number().int().positive().optional(),
 	nome: z.string().min(2).max(150),
 	cpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos numéricos').optional(),
 	senha: z.string().min(6),
 	email: z.string().email().max(100),
-	// USU_ATIVO: 0 = ativo, 1 = inativo. Padrão: 0 (ativo)
-	ativo: z.union([z.boolean(), z.number().int().min(0).max(1)]).optional().default(0),
+	// USU_ATIVO: true = ativo, false = inativo. Padrão: true (ativo)
+	ativo: z.boolean().optional().default(true),
 	curso: z.union([z.string(), z.number().int().nonnegative()]).optional(),
 	periodo: z.union([z.string(), z.number().int().positive()]).optional(),
 })
-
-function toBitActive(value: unknown): 0 | 1 {
-	if (typeof value === 'number') return value === 0 ? 0 : 1
-	if (typeof value === 'boolean') return value ? 1 : 0
-	return 0
-}
 
 function generateRandomCpf(): string {
 	let cpf = ''
@@ -94,34 +88,47 @@ export async function POST(req: Request) {
 		// Checagem prévia de conflitos para retornar todos os campos já cadastrados
 		try {
 			const pool = await getPool()
-			const checkReq = pool.request()
 			const matriculaToUse = parsed.matricula ?? null
 			const cpfToUse = parsed.cpf ?? null
-			checkReq.input('USU_EMAIL', parsed.email)
-			if (matriculaToUse !== null) checkReq.input('USU_MATRICULA', matriculaToUse)
-			if (cpfToUse !== null) checkReq.input('USU_CPF', cpfToUse)
 
-			const whereClauses: string[] = ["USU_EMAIL = @USU_EMAIL"]
-			if (matriculaToUse !== null) whereClauses.push("USU_MATRICULA = @USU_MATRICULA")
-			if (cpfToUse !== null) whereClauses.push("USU_CPF = @USU_CPF")
+			const whereClauses: string[] = []
+			const checkValues: any[] = []
+			let paramIdx = 1
+
+			whereClauses.push(`usu_email = $${paramIdx}`)
+			checkValues.push(parsed.email)
+			paramIdx++
+
+			if (matriculaToUse !== null) {
+				whereClauses.push(`usu_matricula = $${paramIdx}`)
+				checkValues.push(matriculaToUse)
+				paramIdx++
+			}
+
+			if (cpfToUse !== null) {
+				whereClauses.push(`usu_cpf = $${paramIdx}`)
+				checkValues.push(cpfToUse)
+				paramIdx++
+			}
 
 			const checkSql = `
-			SELECT
-				MAX(CASE WHEN USU_EMAIL = @USU_EMAIL THEN 1 ELSE 0 END) AS emailExists,
-				MAX(CASE WHEN ${matriculaToUse !== null ? 'USU_MATRICULA = @USU_MATRICULA' : '1=0'} THEN 1 ELSE 0 END) AS matriculaExists,
-				MAX(CASE WHEN ${cpfToUse !== null ? 'USU_CPF = @USU_CPF' : '1=0'} THEN 1 ELSE 0 END) AS cpfExists
-			FROM USUARIO
+			SELECT usu_email, usu_matricula, usu_cpf
+			FROM usuario
 			WHERE ${whereClauses.join(' OR ')}
 			`
 
-			const checkRes = await checkReq.query<{ emailExists: number; matriculaExists: number; cpfExists: number }>(checkSql)
-			const row = checkRes.recordset[0]
-			const conflicts = {
-				email: !!row?.emailExists,
-				matricula: !!row?.matriculaExists,
-				cpf: !!row?.cpfExists,
-			}
-			if (conflicts.email || conflicts.matricula || conflicts.cpf) {
+			const checkRes = await pool.query(checkSql, checkValues)
+			if (checkRes.rows.length > 0) {
+				const conflicts: any = {
+					email: false,
+					matricula: false,
+					cpf: false
+				}
+				for (const row of checkRes.rows) {
+					if (row.usu_email === parsed.email) conflicts.email = true
+					if (matriculaToUse !== null && row.usu_matricula === matriculaToUse) conflicts.matricula = true
+					if (cpfToUse !== null && row.usu_cpf === cpfToUse) conflicts.cpf = true
+				}
 				return NextResponse.json({ ok: false, error: 'Conflitos de dados', conflicts }, { status: 409 })
 			}
 		} catch (preErr) {
@@ -132,71 +139,67 @@ export async function POST(req: Request) {
 		while (tentativa < 5) {
 			try {
 				const pool = await getPool()
-				const request = pool.request()
 
 				const matricula = parsed.matricula ?? generateMatricula()
 				const cpf = parsed.cpf ?? generateRandomCpf()
-				const ativoBit = 1
-
-				request.input('USU_IDPERMISSAO', parsed.idPermissao)
-				request.input('USU_MATRICULA', matricula)
-				request.input('USU_NOME', parsed.nome)
-				request.input('USU_CPF', cpf)
-				request.input('USU_SENHA', Buffer.from(senhaHash, 'hex'))
-				request.input('USU_EMAIL', parsed.email)
-				request.input('USU_ATIVO', ativoBit)
+				const ativo = parsed.ativo ?? true
 
 				const insertFields: string[] = [
-					'USU_IDPERMISSAO',
-					'USU_MATRICULA',
-					'USU_NOME',
-					'USU_CPF',
-					'USU_SENHA',
-					'USU_EMAIL',
-					'USU_ATIVO'
+					'usu_idpermissao',
+					'usu_matricula',
+					'usu_nome',
+					'usu_cpf',
+					'usu_senha',
+					'usu_email',
+					'usu_ativo'
 				]
-				const insertValues: string[] = [
-					'@USU_IDPERMISSAO',
-					'@USU_MATRICULA',
-					'@USU_NOME',
-					'@USU_CPF',
-					'@USU_SENHA',
-					'@USU_EMAIL',
-					'@USU_ATIVO'
+				const insertValues: any[] = [
+					parsed.idPermissao,
+					matricula,
+					parsed.nome,
+					cpf,
+					Buffer.from(senhaHash, 'hex'),
+					parsed.email,
+					ativo
 				]
 
 				if (parsed.curso !== undefined && parsed.curso !== null) {
 					const cursoId = typeof parsed.curso === 'string' ? Number(parsed.curso) : parsed.curso
-					request.input('USU_IDCURSO', cursoId)
-					insertFields.push('USU_IDCURSO')
-					insertValues.push('@USU_IDCURSO')
+					if (cursoId > 0) {
+						insertFields.push('usu_idcurso')
+						insertValues.push(cursoId)
+					}
 				}
 
 				if (parsed.periodo !== undefined && parsed.periodo !== null) {
 					const periodoId = typeof parsed.periodo === 'string' ? Number(parsed.periodo) : parsed.periodo
-					request.input('USU_IDPERIODO', periodoId)
-					insertFields.push('USU_IDPERIODO')
-					insertValues.push('@USU_IDPERIODO')
+					if (periodoId > 0) {
+						insertFields.push('usu_idperiodo')
+						insertValues.push(periodoId)
+					}
 				}
 
+				const placeholders = insertValues.map((_, i) => `$${i + 1}`).join(', ')
 				const insertSql = `
-				INSERT INTO USUARIO (
+				INSERT INTO usuario (
 					${insertFields.join(', ')}
-				) OUTPUT INSERTED.USU_ID
-				VALUES (${insertValues.join(', ')})
+				)
+				VALUES (${placeholders})
+				RETURNING usu_id
 				`
 
-				const result = await request.query<{ USU_ID: number }>(insertSql)
-				const newId = result.recordset[0]?.USU_ID
+				const result = await pool.query(insertSql, insertValues)
+				const newId = result.rows[0]?.usu_id
 
 				return NextResponse.json({ ok: true, id: newId })
 			} catch (e) {
 				const msg = (e as Error & { code?: string }).message || ''
-				if (/UNIQUE|duplicate|unique key|IX_|UQ_|CPF|MATRICULA/i.test(msg)) {
+				const code = (e as any)?.code
+				if (/unique|duplicate/i.test(msg) || code === '23505') {
 					tentativa++
 					continue
 				}
-				if ((e as any)?.code === 'ESOCKET' || /ECONN|ETIMEOUT|ENOTFOUND|EAI_AGAIN/i.test(msg)) {
+				if (code === 'ESOCKET' || /ECONN|ETIMEOUT|ENOTFOUND|EAI_AGAIN/i.test(msg)) {
 					return NextResponse.json({ ok: false, error: 'Falha de conexão com o banco de dados' }, { status: 503 })
 				}
 				throw e
@@ -218,22 +221,28 @@ export async function POST(req: Request) {
 		if (/cpf|usu_cpf|IX_USUARIO_CPF|unique.*cpf|duplicat.*cpf/i.test(message)) {
 			return NextResponse.json({ ok: false, error: 'CPF já cadastrado' }, { status: 409 });
 		}
-		const conflict = /UNIQUE|duplicate|unique key|IX_|UQ_/i.test(message);
+		const conflict = /unique|duplicate/i.test(message) || (err as any)?.code === '23505';
 		return NextResponse.json({ ok: false, error: message }, { status: conflict ? 409 : 400 });
 	}
 }
 
 const updateSchema = z.object({
 	usuarioId: z.number().int().positive(),
+	id: z.number().int().positive().optional(), // Aceitar também como 'id'
 	nome: z.string().min(2).max(150).optional(),
 	curso: z.union([z.string(), z.number().int().nonnegative()]).optional(),
 	periodo: z.union([z.string(), z.number().int().positive()]).optional(),
+	idPermissao: z.number().int().positive().optional(),
 })
 
 export async function PUT(req: Request) {
 	let parsed: z.infer<typeof updateSchema>
 	try {
 		const json = await req.json()
+		// Aceitar 'id' como alias de 'usuarioId'
+		if (json.id && !json.usuarioId) {
+			json.usuarioId = json.id
+		}
 		parsed = updateSchema.parse(json)
 	} catch (err) {
 		if (err instanceof z.ZodError) {
@@ -244,77 +253,167 @@ export async function PUT(req: Request) {
 
 	try {
 		const pool = await getPool()
-		const request = pool.request()
-
-		request.input('USU_ID', parsed.usuarioId)
 		
 		const updates: string[] = []
-		const params: { [key: string]: any } = {}
+		const values: any[] = []
+		let paramCount = 1
 
 		if (parsed.nome !== undefined) {
-			request.input('USU_NOME', parsed.nome)
-			updates.push('USU_NOME = @USU_NOME')
+			updates.push(`usu_nome = $${paramCount}`)
+			values.push(parsed.nome)
+			paramCount++
+		}
+
+		if (parsed.idPermissao !== undefined) {
+			updates.push(`usu_idpermissao = $${paramCount}`)
+			values.push(parsed.idPermissao)
+			paramCount++
 		}
 
 		if (parsed.curso !== undefined && parsed.curso !== null) {
 			const cursoId = typeof parsed.curso === 'string' ? Number(parsed.curso) : parsed.curso
-			request.input('USU_IDCURSO', cursoId)
-			updates.push('USU_IDCURSO = @USU_IDCURSO')
+			if (cursoId > 0) {
+				updates.push(`usu_idcurso = $${paramCount}`)
+				values.push(cursoId)
+				paramCount++
+			}
 		}
 
 		if (parsed.periodo !== undefined && parsed.periodo !== null) {
 			const periodoId = typeof parsed.periodo === 'string' ? Number(parsed.periodo) : parsed.periodo
-			request.input('USU_IDPERIODO', periodoId)
-			updates.push('USU_IDPERIODO = @USU_IDPERIODO')
+			if (periodoId > 0) {
+				updates.push(`usu_idperiodo = $${paramCount}`)
+				values.push(periodoId)
+				paramCount++
+			}
 		}
 
 		if (updates.length === 0) {
 			return NextResponse.json({ ok: false, error: 'Nenhum campo para atualizar' }, { status: 400 })
 		}
 
+		values.push(parsed.usuarioId)
 		const updateSql = `
-			UPDATE USUARIO
+			UPDATE usuario
 			SET ${updates.join(', ')}
-			WHERE USU_ID = @USU_ID
+			WHERE usu_id = $${paramCount}
 		`
 
-		await request.query(updateSql)
+		await pool.query(updateSql, values)
 
 		// Buscar dados atualizados com curso e período
-		const selectReq = pool.request()
-		selectReq.input('USU_ID', parsed.usuarioId)
-		const userRes = await selectReq.query(`
+		const userRes = await pool.query(`
 			SELECT 
-				USU_ID, 
-				USU_NOME, 
-				USU_EMAIL, 
-				USU_ATIVO, 
-				USU_IDPERMISSAO,
-				USU_IDCURSO,
-				USU_IDPERIODO,
-				USU_AVALIACAO
-			FROM USUARIO 
-			WHERE USU_ID = @USU_ID
-		`)
-		const user = userRes.recordset[0]
+				usu_id, 
+				usu_nome, 
+				usu_email, 
+				usu_ativo, 
+				usu_idpermissao,
+				usu_idcurso,
+				usu_idperiodo,
+				usu_avaliacao
+			FROM usuario 
+			WHERE usu_id = $1
+		`, [parsed.usuarioId])
+		const user = mapColumnsToUpperCase(userRes.rows[0])
 
 		// Buscar descrição do curso e período se existirem
 		if (user.USU_IDCURSO !== null && user.USU_IDCURSO !== undefined) {
-			const cursoRes = await selectReq.query(`
-				SELECT CUR_DESC FROM CURSO WHERE CUR_ID = ${user.USU_IDCURSO}
-			`)
-			user.USU_CURSO_DESC = cursoRes.recordset[0]?.CUR_DESC || null
+			const cursoRes = await pool.query(`
+				SELECT cur_desc FROM curso WHERE cur_id = $1
+			`, [user.USU_IDCURSO])
+			user.USU_CURSO_DESC = cursoRes.rows[0]?.cur_desc || null
 		}
 
 		if (user.USU_IDPERIODO !== null && user.USU_IDPERIODO !== undefined) {
-			const periodoRes = await selectReq.query(`
-				SELECT PER_DESCRICAO FROM PERIODO WHERE PER_ID = ${user.USU_IDPERIODO}
-			`)
-			user.USU_PERIODO_DESC = periodoRes.recordset[0]?.PER_DESCRICAO || null
+			const periodoRes = await pool.query(`
+				SELECT per_descricao FROM periodo WHERE per_id = $1
+			`, [user.USU_IDPERIODO])
+			user.USU_PERIODO_DESC = periodoRes.rows[0]?.per_descricao || null
 		}
 
 		return NextResponse.json({ ok: true, user })
 	} catch (err) {
 		return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
+	}
+}
+
+// DELETE - Excluir usuário
+export async function DELETE(req: NextRequest) {
+	try {
+		const { searchParams } = new URL(req.url)
+		const id = searchParams.get('id')
+
+		if (!id) {
+			return NextResponse.json(
+				{ ok: false, error: 'ID do usuário é obrigatório.' },
+				{ status: 400 }
+			)
+		}
+
+		const pool = await getPool()
+		const userId = parseInt(id)
+
+		// Verificar se o usuário existe
+		const checkUser = await pool.query(
+			'SELECT usu_id FROM usuario WHERE usu_id = $1',
+			[userId]
+		)
+
+		if (checkUser.rows.length === 0) {
+			return NextResponse.json(
+				{ ok: false, error: 'Usuário não encontrado.' },
+				{ status: 404 }
+			)
+		}
+
+		// Verificar se há dúvidas vinculadas
+		const checkDuvidas = await pool.query(
+			'SELECT COUNT(*) as total FROM duvida WHERE duv_idusuario = $1',
+			[userId]
+		)
+
+		if (parseInt(checkDuvidas.rows[0].total) > 0) {
+			return NextResponse.json(
+				{ ok: false, error: 'Não é possível excluir um usuário que possui dúvidas cadastradas.' },
+				{ status: 409 }
+			)
+		}
+
+		// Verificar se há respostas vinculadas
+		const checkRespostas = await pool.query(
+			'SELECT COUNT(*) as total FROM resposta WHERE res_idusuario = $1',
+			[userId]
+		)
+
+		if (parseInt(checkRespostas.rows[0].total) > 0) {
+			return NextResponse.json(
+				{ ok: false, error: 'Não é possível excluir um usuário que possui respostas cadastradas.' },
+				{ status: 409 }
+			)
+		}
+
+		// Excluir avaliações de respostas feitas pelo usuário
+		await pool.query(
+			'DELETE FROM avaliacaoresposta WHERE ava_idusuario = $1',
+			[userId]
+		)
+
+		// Excluir o usuário
+		await pool.query(
+			'DELETE FROM usuario WHERE usu_id = $1',
+			[userId]
+		)
+
+		return NextResponse.json({
+			ok: true,
+			message: 'Usuário excluído com sucesso!'
+		})
+	} catch (err) {
+		console.error('Erro ao excluir usuário:', err)
+		return NextResponse.json(
+			{ ok: false, error: (err as Error).message },
+			{ status: 500 }
+		)
 	}
 }

@@ -20,7 +20,7 @@ interface CoursesManagementProps {
 interface Course {
   CUR_ID: number
   CUR_DESC: string
-  CUR_ATIVO: number
+  CUR_ATIVO: boolean
 }
 
 interface Materia {
@@ -36,7 +36,7 @@ interface Materia {
 interface Periodo {
   PER_ID: number
   PER_DESCRICAO: string
-  PER_ATIVO: number
+  PER_ATIVO: boolean
 }
 
 export function CoursesManagement({ currentUser }: CoursesManagementProps) {
@@ -112,7 +112,7 @@ export function CoursesManagement({ currentUser }: CoursesManagementProps) {
           body: JSON.stringify({
             id: courseModal.course.CUR_ID,
             descricao: courseData.descricao,
-            ativo: 1
+            ativo: true
           })
         })
 

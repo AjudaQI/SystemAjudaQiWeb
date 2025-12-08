@@ -12,9 +12,17 @@ import { VersionLabel } from "@/components/version-label"
 
 // TODO: Remover estas flags quando as funcionalidades estiverem prontas
 const ENABLE_CHAT = false
-const ENABLE_PROFILE = false
+const ENABLE_PROFILE = true
 const ENABLE_FRIENDS = false
 const ENABLE_AVAILABLE_HELPERS = false
+
+interface MenuItem {
+  id: string
+  label: string
+  icon: any
+  route: string
+  badge?: string
+}
 
 interface SidebarProps {
   activeSection: string
@@ -97,14 +105,14 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   // Determina a seção ativa baseada na rota atual ou activeSection
   const currentActiveSection = getSectionFromPathname(pathname) || activeSection
 
-  // Verifica se o usuário tem permissão de administrador (USU_IDPERMISSAO = 4)
-  const isAdmin = user?.USU_IDPERMISSAO === 4 || user?.USU_IDPERMISSAO === "4"
+  // Verifica se o usuário tem permissão de administrador (USU_IDPERMISSAO = 2)
+  const isAdmin = user?.USU_IDPERMISSAO === 2 || user?.USU_IDPERMISSAO === "2"
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { id: "dashboard", label: "Dashboard", icon: Home, route: "/dashboard" },
     { id: "help-requests", label: "Solicitações de Ajuda", icon: HelpCircle, route: "/solicitacoes" },
     { id: "available-helpers", label: "Disponíveis para Ajudar", icon: Users, route: "/disponiveis" },
-    { id: "chat", label: "Chat", icon: MessageCircle, badge: "3", route: "/chat" },
+    { id: "chat", label: "Chat", icon: MessageCircle, route: "/chat", badge: "3" },
     { id: "profile", label: "Perfil", icon: User, route: "/perfil" },
     { id: "friends", label: "Amigos", icon: UserPlus, route: "/amigos" },
   ]

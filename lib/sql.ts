@@ -1,18 +1,17 @@
 import { getPool } from '@/lib/db'
 
-function splitOnGo(sqlText: string): string[] {
-	return sqlText
+export async function executeBatch(sqlText: string): Promise<void> {
+	const pool = await getPool()
+	
+	// PostgreSQL não precisa de separador GO, mas vamos remover se existir
+	const statements = sqlText
 		.replace(/\r\n/g, '\n')
 		.split(/^[\t ]*GO[\t ]*$/gim)
 		.map(s => s.trim())
 		.filter(s => s.length > 0)
-}
-
-export async function executeBatch(sqlText: string): Promise<void> {
-	const pool = await getPool()
-	const statements = splitOnGo(sqlText)
+	
 	for (const stmt of statements) {
-		await pool.request().batch(stmt)
+		await pool.query(stmt)
 	}
 }
 

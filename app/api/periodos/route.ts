@@ -5,23 +5,29 @@ import { getPool } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const pool = await getPool()
-    const request = pool.request()
 
     const query = `
       SELECT 
-        PER_ID,
-        PER_DESCRICAO,
-        PER_ATIVO
+        per_id,
+        per_descricao,
+        per_ativo
       FROM PERIODO
-      WHERE PER_ATIVO = 1
-      ORDER BY PER_ID
+      WHERE per_ativo = TRUE
+      ORDER BY per_id
     `
 
-    const result = await request.query(query)
+    const result = await pool.query(query)
+
+    // Converter nomes de colunas para maiúsculas (compatibilidade)
+    const periodos = result.rows.map(row => ({
+      PER_ID: row.per_id,
+      PER_DESCRICAO: row.per_descricao,
+      PER_ATIVO: row.per_ativo
+    }))
 
     return NextResponse.json({
       ok: true,
-      periodos: result.recordset
+      periodos
     })
   } catch (err) {
     console.error('Erro ao buscar períodos:', err)

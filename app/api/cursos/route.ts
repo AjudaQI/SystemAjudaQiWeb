@@ -5,23 +5,29 @@ import { getPool } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const pool = await getPool()
-    const request = pool.request()
 
     const query = `
       SELECT 
-        CUR_ID,
-        CUR_DESC,
-        CUR_ATIVO
+        cur_id,
+        cur_desc,
+        cur_ativo
       FROM CURSO
-      WHERE CUR_ATIVO = 1
-      ORDER BY CUR_DESC
+      WHERE cur_ativo = TRUE
+      ORDER BY cur_desc
     `
 
-    const result = await request.query(query)
+    const result = await pool.query(query)
+
+    // Converter nomes de colunas para maiúsculas (compatibilidade)
+    const cursos = result.rows.map(row => ({
+      CUR_ID: row.cur_id,
+      CUR_DESC: row.cur_desc,
+      CUR_ATIVO: row.cur_ativo
+    }))
 
     return NextResponse.json({
       ok: true,
-      cursos: result.recordset
+      cursos
     })
   } catch (err) {
     console.error('Erro ao buscar cursos:', err)
@@ -45,16 +51,14 @@ export async function POST(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
 
     // Verifica se já existe um curso com essa descrição
-    request.input('CUR_DESC', descricao.trim())
     const checkQuery = `
-      SELECT CUR_ID FROM CURSO WHERE CUR_DESC = @CUR_DESC
+      SELECT cur_id FROM CURSO WHERE cur_desc = $1
     `
-    const checkResult = await request.query(checkQuery)
+    const checkResult = await pool.query(checkQuery, [descricao.trim()])
 
-    if (checkResult.recordset.length > 0) {
+    if (checkResult.rows.length > 0) {
       return NextResponse.json(
         { ok: false, error: 'Já existe um curso com esta descrição.' },
         { status: 409 }
@@ -63,15 +67,21 @@ export async function POST(req: NextRequest) {
 
     // Insere o novo curso
     const insertQuery = `
-      INSERT INTO CURSO (CUR_DESC, CUR_ATIVO)
-      OUTPUT INSERTED.CUR_ID, INSERTED.CUR_DESC, INSERTED.CUR_ATIVO
-      VALUES (@CUR_DESC, 1)
+      INSERT INTO CURSO (cur_desc, cur_ativo)
+      VALUES ($1, TRUE)
+      RETURNING cur_id, cur_desc, cur_ativo
     `
-    const insertResult = await request.query(insertQuery)
+    const insertResult = await pool.query(insertQuery, [descricao.trim()])
+
+    const curso = {
+      CUR_ID: insertResult.rows[0].cur_id,
+      CUR_DESC: insertResult.rows[0].cur_desc,
+      CUR_ATIVO: insertResult.rows[0].cur_ativo
+    }
 
     return NextResponse.json({
       ok: true,
-      curso: insertResult.recordset[0],
+      curso,
       message: 'Curso criado com sucesso!'
     })
   } catch (err) {
@@ -103,32 +113,37 @@ export async function PUT(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
-
-    request.input('CUR_ID', id)
-    request.input('CUR_DESC', descricao.trim())
-    request.input('CUR_ATIVO', ativo !== undefined ? (ativo ? 1 : 0) : 1)
 
     const updateQuery = `
       UPDATE CURSO
-      SET CUR_DESC = @CUR_DESC,
-          CUR_ATIVO = @CUR_ATIVO
-      OUTPUT INSERTED.CUR_ID, INSERTED.CUR_DESC, INSERTED.CUR_ATIVO
-      WHERE CUR_ID = @CUR_ID
+      SET cur_desc = $1,
+          cur_ativo = $2
+      WHERE cur_id = $3
+      RETURNING cur_id, cur_desc, cur_ativo
     `
 
-    const result = await request.query(updateQuery)
+    const result = await pool.query(updateQuery, [
+      descricao.trim(),
+      ativo !== undefined ? ativo : true,
+      id
+    ])
 
-    if (result.recordset.length === 0) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { ok: false, error: 'Curso não encontrado.' },
         { status: 404 }
       )
     }
 
+    const curso = {
+      CUR_ID: result.rows[0].cur_id,
+      CUR_DESC: result.rows[0].cur_desc,
+      CUR_ATIVO: result.rows[0].cur_ativo
+    }
+
     return NextResponse.json({
       ok: true,
-      curso: result.recordset[0],
+      curso,
       message: 'Curso atualizado com sucesso!'
     })
   } catch (err) {
@@ -154,17 +169,14 @@ export async function DELETE(req: NextRequest) {
     }
 
     const pool = await getPool()
-    const request = pool.request()
-
-    request.input('CUR_ID', parseInt(id))
 
     // Verifica se existem matérias vinculadas ao curso
     const checkQuery = `
-      SELECT COUNT(*) as total FROM MATERIA WHERE MAT_IDCURSO = @CUR_ID
+      SELECT COUNT(*) as total FROM MATERIA WHERE mat_idcurso = $1
     `
-    const checkResult = await request.query(checkQuery)
+    const checkResult = await pool.query(checkQuery, [parseInt(id)])
 
-    if (checkResult.recordset[0].total > 0) {
+    if (checkResult.rows[0].total > 0) {
       return NextResponse.json(
         { ok: false, error: 'Não é possível excluir um curso que possui matérias vinculadas.' },
         { status: 409 }
@@ -174,11 +186,11 @@ export async function DELETE(req: NextRequest) {
     // Desativa o curso (soft delete)
     const deleteQuery = `
       UPDATE CURSO
-      SET CUR_ATIVO = 0
-      WHERE CUR_ID = @CUR_ID
+      SET cur_ativo = FALSE
+      WHERE cur_id = $1
     `
 
-    await request.query(deleteQuery)
+    await pool.query(deleteQuery, [parseInt(id)])
 
     return NextResponse.json({
       ok: true,

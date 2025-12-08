@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
+import { mapColumnsToUpperCase } from '@/lib/pg-helpers'
 
 export async function GET(req: NextRequest) {
 	try {
@@ -16,61 +17,46 @@ export async function GET(req: NextRequest) {
 		const pool = await getPool()
 
 		// Buscar resumo (média e total de avaliações) usando a tabela de avaliações/respostas
-		const resumoReq = pool.request()
-		resumoReq.input('USUARIO_ID', usuarioId)
-
-		const resumoRes = await resumoReq.query<{
-			MEDIA_GERAL: number | null
-			TOTAL_AVALIACOES: number
-		}>(`
+		const resumoRes = await pool.query(`
       SELECT 
-        AVG(CAST(A.AVA_ESTRELA AS FLOAT)) AS MEDIA_GERAL,
-        COUNT(*) AS TOTAL_AVALIACOES
-      FROM AVALIACAORESPOSTA A
-      INNER JOIN RESPOSTA R ON R.RES_IDRESPOSTA = A.AVA_IDRESPOSTA
-      WHERE R.RES_IDUSUARIO = @USUARIO_ID
-    `)
+        AVG(a.ava_estrela::float) AS media_geral,
+        COUNT(*) AS total_avaliacoes
+      FROM avaliacaoresposta a
+      INNER JOIN resposta r ON r.res_idresposta = a.ava_idresposta
+      WHERE r.res_idusuario = $1
+    `, [usuarioId])
 
-		const resumo = resumoRes.recordset[0] || { MEDIA_GERAL: null, TOTAL_AVALIACOES: 0 }
+		const resumo = resumoRes.rows[0] || { media_geral: null, total_avaliacoes: 0 }
 
 		// Buscar lista de respostas avaliadas do usuário
-		const listaReq = pool.request()
-		listaReq.input('USUARIO_ID', usuarioId)
-
-		const listaRes = await listaReq.query<{
-			AVA_ESTRELA: number
-			AVA_IDRESPOSTA: number
-			AVA_IDUSUARIO: number
-			AVALIADOR_NOME: string
-			RES_DESCRICAO: string
-			RES_DATARESPOSTA: string
-		}>(`
+		const listaRes = await pool.query(`
       SELECT 
-        A.AVA_ESTRELA,
-        A.AVA_IDRESPOSTA,
-        A.AVA_IDUSUARIO,
-        U_AVALIADOR.USU_NOME AS AVALIADOR_NOME,
-        R.RES_DESCRICAO,
-        R.RES_DATARESPOSTA
-      FROM AVALIACAORESPOSTA A
-      INNER JOIN RESPOSTA R ON R.RES_IDRESPOSTA = A.AVA_IDRESPOSTA
-      INNER JOIN USUARIO U_AVALIADOR ON U_AVALIADOR.USU_ID = A.AVA_IDUSUARIO
-      WHERE R.RES_IDUSUARIO = @USUARIO_ID
-      ORDER BY R.RES_DATARESPOSTA DESC
-    `)
+        a.ava_estrela,
+        a.ava_idresposta,
+        a.ava_idusuario,
+        u_avaliador.usu_nome AS avaliador_nome,
+        r.res_descricao,
+        r.res_dataresposta
+      FROM avaliacaoresposta a
+      INNER JOIN resposta r ON r.res_idresposta = a.ava_idresposta
+      INNER JOIN usuario u_avaliador ON u_avaliador.usu_id = a.ava_idusuario
+      WHERE r.res_idusuario = $1
+      ORDER BY r.res_dataresposta DESC
+    `, [usuarioId])
 
 		return NextResponse.json({
 			ok: true,
 			resumo: {
-				media: resumo.MEDIA_GERAL,
-				total: resumo.TOTAL_AVALIACOES,
+				media: resumo.media_geral,
+				total: resumo.total_avaliacoes,
 			},
-			avaliacoes: listaRes.recordset,
+			avaliacoes: listaRes.rows.map(mapColumnsToUpperCase),
 		})
 	} catch (err) {
 		console.error('Erro ao buscar avaliações do usuário:', err)
 		return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
 	}
 }
+
 
 
