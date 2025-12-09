@@ -61,8 +61,11 @@ function DashboardPageContent() {
         const response = await fetch(`/api/duvidas/count?usuarioId=${usuarioId}`)
         const data = await response.json()
 
-        if (data.ok && typeof data.count === 'number') {
-          setAjudasSolicitadas(data.count)
+        if (data.ok) {
+          const count = Number(data.count) || 0
+          setAjudasSolicitadas(count)
+        } else {
+          console.error('Erro na resposta da API de dúvidas:', data.error)
         }
       } catch (error) {
         console.error('Erro ao buscar quantidade de ajudas solicitadas:', error)
@@ -82,8 +85,11 @@ function DashboardPageContent() {
         const response = await fetch(`/api/respostas/count?usuarioId=${usuarioId}`)
         const data = await response.json()
 
-        if (data.ok && typeof data.count === 'number') {
-          setAjudasPrestadas(data.count)
+        if (data.ok) {
+          const count = Number(data.count) || 0
+          setAjudasPrestadas(count)
+        } else {
+          console.error('Erro na resposta da API de respostas:', data.error)
         }
       } catch (error) {
         console.error('Erro ao buscar quantidade de ajudas prestadas:', error)
@@ -210,7 +216,7 @@ function DashboardPageContent() {
   }
 
   const handleVerTodasSolicitacoes = () => {
-    router.push("/solicitacoes")
+    router.push("/solicitacoes/1?minhas=true")
   }
 
   const handleClickRequest = () => {

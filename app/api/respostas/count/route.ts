@@ -16,12 +16,12 @@ export async function GET(req: NextRequest) {
     const pool = await getPool()
 
     const result = await pool.query(`
-      SELECT COUNT(r.res_idresposta) AS qtd_resposta 
+      SELECT COUNT(r.res_idresposta)::INTEGER AS qtd_resposta 
       FROM resposta r
-      WHERE r.res_idusuario = $1
+      WHERE r.res_idusuario = $1::BIGINT
     `, [usuarioId])
 
-    const qtdRespostas = result.rows[0]?.qtd_resposta || 0
+    const qtdRespostas = Number(result.rows[0]?.qtd_resposta) || 0
 
     return NextResponse.json({
       ok: true,

@@ -154,6 +154,7 @@ export async function GET(req: NextRequest) {
         d.duv_idmateria,
         m.mat_desc,
         pm.per_descricao AS materia_periodo_desc,
+        cm.cur_desc AS materia_curso_desc,
         u.usu_nome,
         u.usu_email,
         cu.cur_desc AS usuario_curso_desc,
@@ -161,6 +162,7 @@ export async function GET(req: NextRequest) {
       FROM duvida d
       INNER JOIN materia m ON d.duv_idmateria = m.mat_id
       INNER JOIN periodo pm ON m.mat_idperiodo = pm.per_id
+      LEFT JOIN curso cm ON m.mat_idcurso = cm.cur_id
       INNER JOIN usuario u ON d.duv_idusuario = u.usu_id
       LEFT JOIN curso cu ON u.usu_idcurso = cu.cur_id
       LEFT JOIN periodo pu ON u.usu_idperiodo = pu.per_id
@@ -180,6 +182,7 @@ export async function GET(req: NextRequest) {
         DUV_IDMATERIA: row.duv_idmateria,
         MAT_DESC: row.mat_desc,
         MATERIA_PERIODO_DESC: row.materia_periodo_desc,
+        MATERIA_CURSO_DESC: row.materia_curso_desc,
         USU_NOME: row.usu_nome,
         USU_EMAIL: row.usu_email,
         USUARIO_CURSO_DESC: row.usuario_curso_desc,

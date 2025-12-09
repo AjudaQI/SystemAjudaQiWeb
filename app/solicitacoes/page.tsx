@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, Suspense } from "react"
+import { useState, useEffect, useCallback, Suspense, useRef } from "react"
 import { useSearchParams, useRouter, useParams } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { LoadingSpinner } from "@/components/loading-spinner"
@@ -29,6 +29,12 @@ interface Materia {
   PER_DESCRICAO: string
 }
 
+interface Curso {
+  CUR_ID: number
+  CUR_DESC: string
+  CUR_ATIVO: boolean
+}
+
 interface DuvidaFromAPI {
   DUV_IDDUVIDA: number
   DUV_TITULO: string
@@ -39,6 +45,7 @@ interface DuvidaFromAPI {
   DUV_IDMATERIA: number
   MAT_DESC: string
   MATERIA_PERIODO_DESC: string
+  MATERIA_CURSO_DESC: string | null
   USU_NOME: string
   USU_EMAIL: string
   USUARIO_CURSO_DESC: string | null
@@ -100,9 +107,18 @@ export function SolicitacoesPageContent() {
   
   const [searchTerm, setSearchTerm] = useState("")
   const [subjectFilter, setSubjectFilter] = useState("all")
-  const [priorityFilter, setPriorityFilter] = useState("all")
+  const [courseFilter, setCourseFilter] = useState("all")
   const [periodFilter, setPeriodFilter] = useState("all")
+  const [cursoSearchTerm, setCursoSearchTerm] = useState("")
+  const [isCursoDropdownOpen, setIsCursoDropdownOpen] = useState(false)
+  const cursoInputRef = useRef<HTMLInputElement>(null)
+  const cursoDropdownRef = useRef<HTMLDivElement>(null)
+  const [materiaSearchTerm, setMateriaSearchTerm] = useState("")
+  const [isMateriaDropdownOpen, setIsMateriaDropdownOpen] = useState(false)
+  const materiaInputRef = useRef<HTMLInputElement>(null)
+  const materiaDropdownRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
+    cursoId: "",
     subject: "",
     title: "",
     description: "",
@@ -115,6 +131,8 @@ export function SolicitacoesPageContent() {
   const currentUserPeriod = 6 // Usuário está no 6º período
   const [materias, setMaterias] = useState<Materia[]>([])
   const [loadingMaterias, setLoadingMaterias] = useState(false)
+  const [cursos, setCursos] = useState<Curso[]>([])
+  const [loadingCursos, setLoadingCursos] = useState(false)
   const [requests, setRequests] = useState<HelpRequest[]>([])
   const [loadingRequests, setLoadingRequests] = useState(false)
   const [respondingRequestId, setRespondingRequestId] = useState<number | null>(null)
@@ -141,6 +159,10 @@ export function SolicitacoesPageContent() {
     const nova = searchParams.get('nova')
     if (nova === 'true') {
       setEditingRequest(null)
+      setCursoSearchTerm("")
+      setMateriaSearchTerm("")
+      setIsCursoDropdownOpen(false)
+      setIsMateriaDropdownOpen(false)
       setShowForm(true)
     }
   }, [searchParams])
@@ -179,7 +201,7 @@ export function SolicitacoesPageContent() {
               estimatedHours: 1,
               availableForChat: false,
               period: periodoNum,
-              course: duvida.USUARIO_CURSO_DESC || "Curso não informado",
+              course: duvida.MATERIA_CURSO_DESC || "Curso não informado",
               createdAt: duvida.DUV_DATADUVIDA,
               status: duvida.DUV_RESOLVIDA ? "resolvida" as const : "pendente" as const,
               author: {
@@ -287,18 +309,103 @@ export function SolicitacoesPageContent() {
     fetchMaterias()
   }, [])
 
-  // Lista de todas as matérias (sem filtro de período) - remover duplicatas
-  const subjects = [...new Set(materias.map(m => m.MAT_DESC))]
+  // Buscar cursos do banco de dados
+  useEffect(() => {
+    const fetchCursos = async () => {
+      setLoadingCursos(true)
+      try {
+        const response = await fetch('/api/cursos')
+        const data = await response.json()
+
+        if (data.ok) {
+          setCursos(data.cursos || [])
+        } else {
+          console.error('Erro ao buscar cursos:', data.error)
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar os cursos",
+            variant: "destructive"
+          })
+        }
+      } catch (error) {
+        console.error('Erro ao buscar cursos:', error)
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar cursos do banco de dados",
+          variant: "destructive"
+        })
+      } finally {
+        setLoadingCursos(false)
+      }
+    }
+
+    fetchCursos()
+  }, [])
+
+  // Filtrar cursos baseado no termo de busca
+  const filteredCursos = cursoSearchTerm.trim()
+    ? cursos.filter(curso => 
+        curso.CUR_DESC.toLowerCase().includes(cursoSearchTerm.toLowerCase())
+      )
+    : cursos
+
+  // Filtrar matérias baseado no curso selecionado
+  const materiasByCurso = formData.cursoId
+    ? materias.filter(m => m.MAT_IDCURSO.toString() === formData.cursoId)
+    : []
+  
+  // Lista de matérias do curso selecionado (sem filtro de período) - remover duplicatas
+  const allSubjects = [...new Set(materiasByCurso.map(m => m.MAT_DESC))]
+  
+  // Filtrar matérias baseado no termo de busca
+  const filteredSubjects = materiaSearchTerm.trim()
+    ? allSubjects.filter(subject => 
+        subject.toLowerCase().includes(materiaSearchTerm.toLowerCase())
+      )
+    : allSubjects
+  
+  // Usar filteredSubjects para o Select
+  const subjects = filteredSubjects
+
+  // Obter o nome do curso selecionado
+  const cursoSelecionado = cursos.find(c => c.CUR_ID.toString() === formData.cursoId)
+  const cursoNome = cursoSelecionado ? cursoSelecionado.CUR_DESC : ""
 
   // Função para obter o período de uma matéria
   const getPeriodoByMateria = (materiaDesc: string): string | null => {
-    const materia = materias.find(m => m.MAT_DESC === materiaDesc)
+    // Se tiver curso selecionado, buscar apenas nas matérias desse curso
+    const materiasFiltradas = formData.cursoId
+      ? materias.filter(m => m.MAT_IDCURSO.toString() === formData.cursoId)
+      : materias
+    
+    const materia = materiasFiltradas.find(m => m.MAT_DESC === materiaDesc)
     if (!materia) return null
     
     // Extrair número do período da descrição (ex: "6º Período" -> "6")
     const periodoMatch = materia.PER_DESCRICAO.match(/^(\d+)/)
     return periodoMatch ? periodoMatch[1] : null
   }
+
+  // Fechar dropdown quando clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        materiaDropdownRef.current &&
+        !materiaDropdownRef.current.contains(event.target as Node) &&
+        materiaInputRef.current &&
+        !materiaInputRef.current.contains(event.target as Node)
+      ) {
+        setIsMateriaDropdownOpen(false)
+      }
+    }
+
+    if (isMateriaDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [isMateriaDropdownOpen])
 
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -380,7 +487,7 @@ export function SolicitacoesPageContent() {
             estimatedHours: 1,
             availableForChat: false,
             period: periodoNum,
-            course: duvida.USUARIO_CURSO_DESC || "Curso não informado",
+            course: duvida.MATERIA_CURSO_DESC || "Curso não informado",
             createdAt: duvida.DUV_DATADUVIDA,
             status: duvida.DUV_RESOLVIDA ? "resolvida" as const : "pendente" as const,
             author: {
@@ -402,7 +509,12 @@ export function SolicitacoesPageContent() {
 
       setShowForm(false)
       setEditingRequest(null)
+      setCursoSearchTerm("")
+      setMateriaSearchTerm("")
+      setIsCursoDropdownOpen(false)
+      setIsMateriaDropdownOpen(false)
       setFormData({
+        cursoId: "",
         subject: "",
         title: "",
         description: "",
@@ -532,7 +644,18 @@ export function SolicitacoesPageContent() {
 
   const handleEditRequest = (request: any) => {
     setEditingRequest(request)
+    setCursoSearchTerm("")
+    setMateriaSearchTerm("")
+    setIsCursoDropdownOpen(false)
+    setIsMateriaDropdownOpen(false)
+    
+    // Buscar o cursoId da matéria selecionada
+    const materia = materias.find(m => m.MAT_DESC === request.subject)
+    const cursoId = materia ? materia.MAT_IDCURSO.toString() : ""
+    const curso = cursos.find(c => c.CUR_ID.toString() === cursoId)
+    
     setFormData({
+      cursoId: cursoId,
       subject: request.subject || "",
       title: request.title || "",
       description: request.description || "",
@@ -541,6 +664,12 @@ export function SolicitacoesPageContent() {
       availableForChat: request.availableForChat ?? true,
       period: request.period || "6",
     })
+    
+    // Definir o nome do curso no searchTerm se encontrado
+    if (curso) {
+      setCursoSearchTerm(curso.CUR_DESC)
+    }
+    
     setShowForm(true)
   }
 
@@ -944,14 +1073,16 @@ export function SolicitacoesPageContent() {
       request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.description.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesSubject = subjectFilter === "all" || request.subject === subjectFilter
-    const matchesPriority = priorityFilter === "all" || request.priority === priorityFilter
+    const matchesCourse = courseFilter === "all" || 
+      request.course === courseFilter || 
+      request.author.course === courseFilter
     const matchesPeriod = periodFilter === "all" || request.period === periodFilter
     const matchesPeriodRule = Number.parseInt(request.period) <= currentUserPeriod
     
     // Se showMyRequests for true, mostrar apenas as do usuário; caso contrário, mostrar todas
     const matchesMyRequests = showMyRequests ? request.author.isCurrentUser === true : true
 
-    return matchesSearch && matchesSubject && matchesPriority && matchesPeriod && matchesPeriodRule && matchesMyRequests
+    return matchesSearch && matchesSubject && matchesCourse && matchesPeriod && matchesPeriodRule && matchesMyRequests
   })
 
   // Paginação: 10 solicitações por página
@@ -963,6 +1094,7 @@ export function SolicitacoesPageContent() {
   const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
 
   const uniqueSubjects = [...new Set(requests.map((r) => r.subject))]
+  const uniqueCourses = [...new Set(requests.map((r) => r.course || r.author.course).filter(Boolean))]
 
   // Redirecionar se a página for inválida
   useEffect(() => {
@@ -1002,89 +1134,245 @@ export function SolicitacoesPageContent() {
                   <form onSubmit={handleSubmitRequest} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="subject">Matéria</Label>
-                        <Select
-                          value={formData.subject}
-                          onValueChange={(value) => {
-                            // Buscar o período da matéria selecionada e preencher automaticamente
-                            const periodo = getPeriodoByMateria(value)
-                            setFormData({ 
-                              ...formData, 
-                              subject: value,
-                              period: periodo || formData.period
-                            })
-                          }}
-                          required
-                          disabled={loadingMaterias}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={
-                              loadingMaterias 
-                                ? "Carregando matérias..." 
-                                : subjects.length === 0
-                                  ? "Nenhuma matéria encontrada"
-                                  : "Selecione a matéria"
-                            } />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {subjects.length > 0 && subjects.map((subject, index) => (
-                              <SelectItem key={`subject-${index}-${subject}`} value={subject}>
-                                {subject}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {!loadingMaterias && subjects.length === 0 && (
+                        <Label htmlFor="curso">Curso</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                          <Input
+                            ref={cursoInputRef}
+                            id="curso"
+                            placeholder={loadingCursos ? "Carregando cursos..." : "Digite o nome do curso para buscar..."}
+                            value={cursoSearchTerm || cursoNome || ""}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setCursoSearchTerm(value)
+                              setIsCursoDropdownOpen(true)
+                              
+                              // Se o valor corresponde exatamente a um curso, selecionar
+                              const exactMatch = cursos.find(c => c.CUR_DESC === value)
+                              if (exactMatch) {
+                                setFormData({ 
+                                  ...formData, 
+                                  cursoId: exactMatch.CUR_ID.toString(),
+                                  subject: "",
+                                  period: "6"
+                                })
+                                setCursoSearchTerm("")
+                                setMateriaSearchTerm("")
+                                setIsCursoDropdownOpen(false)
+                                setIsMateriaDropdownOpen(false)
+                              } else {
+                                // Se não é match exato, limpar seleção mas manter busca
+                                setFormData({ ...formData, cursoId: "", subject: "" })
+                              }
+                            }}
+                            onFocus={(e) => {
+                              setIsCursoDropdownOpen(true)
+                              if (cursoNome && !cursoSearchTerm) {
+                                e.currentTarget.select()
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setIsCursoDropdownOpen(false)
+                                cursoInputRef.current?.blur()
+                              } else if (e.key === 'Enter' && filteredCursos.length > 0) {
+                                e.preventDefault()
+                                const firstMatch = filteredCursos[0]
+                                setFormData({ 
+                                  ...formData, 
+                                  cursoId: firstMatch.CUR_ID.toString(),
+                                  subject: "",
+                                  period: "6"
+                                })
+                                setCursoSearchTerm("")
+                                setMateriaSearchTerm("")
+                                setIsCursoDropdownOpen(false)
+                                cursoInputRef.current?.blur()
+                              }
+                            }}
+                            className="pl-10"
+                            disabled={loadingCursos}
+                            required
+                            autoComplete="off"
+                          />
+                          {isCursoDropdownOpen && !loadingCursos && cursos.length > 0 && (
+                            <div
+                              ref={cursoDropdownRef}
+                              className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-auto"
+                            >
+                              {filteredCursos.length > 0 ? (
+                                <div className="p-1">
+                                  {filteredCursos.map((curso) => (
+                                    <div
+                                      key={curso.CUR_ID}
+                                      onClick={() => {
+                                        setFormData({ 
+                                          ...formData, 
+                                          cursoId: curso.CUR_ID.toString(),
+                                          subject: "",
+                                          period: "6"
+                                        })
+                                        setCursoSearchTerm("")
+                                        setMateriaSearchTerm("")
+                                        setIsCursoDropdownOpen(false)
+                                        setIsMateriaDropdownOpen(false)
+                                        cursoInputRef.current?.blur()
+                                      }}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault()
+                                      }}
+                                      className="px-2 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm flex items-center gap-2"
+                                    >
+                                      <span className="flex-1">{curso.CUR_DESC}</span>
+                                      {formData.cursoId === curso.CUR_ID.toString() && (
+                                        <span className="text-primary">✓</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                  Nenhum curso encontrado com esse nome
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {!loadingCursos && cursos.length === 0 && (
                           <p className="text-sm text-muted-foreground">
-                            Nenhuma matéria disponível
+                            Nenhum curso disponível
                           </p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="period">Período da Matéria</Label>
-                        <Select
-                          value={formData.period}
-                          onValueChange={(value) => {
-                            // Se mudar o período manualmente, limpar a matéria se ela não for desse período
-                            const materiaAtual = materias.find(m => m.MAT_DESC === formData.subject)
-                            if (materiaAtual) {
-                              const periodoMatch = materiaAtual.PER_DESCRICAO.match(/^(\d+)/)
-                              const materiaPeriodo = periodoMatch ? periodoMatch[1] : null
-                              if (materiaPeriodo !== value) {
-                                setFormData({ ...formData, period: value, subject: "" })
-                              } else {
-                                setFormData({ ...formData, period: value })
-                              }
-                            } else {
-                              setFormData({ ...formData, period: value })
+                        <Label htmlFor="subject">Matéria</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                          <Input
+                            ref={materiaInputRef}
+                            id="subject"
+                            placeholder={
+                              !formData.cursoId 
+                                ? "Selecione o curso primeiro" 
+                                : loadingMaterias 
+                                  ? "Carregando matérias..." 
+                                  : "Digite o nome da matéria para buscar..."
                             }
-                          }}
-                          required
-                          disabled={!formData.subject}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={
-                              formData.subject 
-                                ? formData.period 
-                                  ? `${formData.period}º Período`
-                                  : "Período"
-                                : "Selecione a matéria primeiro"
-                            } />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((period) => (
-                              <SelectItem key={period} value={period.toString()}>
-                                {period}º Período
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {formData.subject && formData.period && (
-                          <p className="text-xs text-muted-foreground">
+                            value={materiaSearchTerm || formData.subject || ""}
+                            disabled={!formData.cursoId || loadingMaterias}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setMateriaSearchTerm(value)
+                              setIsMateriaDropdownOpen(true)
+                              
+                              // Se o valor corresponde exatamente a uma matéria, selecionar
+                              const exactMatch = allSubjects.find(s => s === value)
+                              if (exactMatch) {
+                                const periodo = getPeriodoByMateria(exactMatch)
+                                setFormData({ 
+                                  ...formData, 
+                                  subject: exactMatch,
+                                  period: periodo || formData.period
+                                })
+                                setMateriaSearchTerm("")
+                                setIsMateriaDropdownOpen(false)
+                              } else {
+                                // Se não é match exato, limpar seleção mas manter busca
+                                setFormData({ ...formData, subject: "" })
+                              }
+                            }}
+                            onFocus={(e) => {
+                              setIsMateriaDropdownOpen(true)
+                              // Se já tem uma matéria selecionada, selecionar todo o texto para facilitar substituição
+                              if (formData.subject && !materiaSearchTerm) {
+                                e.currentTarget.select()
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setIsMateriaDropdownOpen(false)
+                                materiaInputRef.current?.blur()
+                              } else if (e.key === 'Enter' && filteredSubjects.length > 0) {
+                                e.preventDefault()
+                                const firstMatch = filteredSubjects[0]
+                                const periodo = getPeriodoByMateria(firstMatch)
+                                setFormData({ 
+                                  ...formData, 
+                                  subject: firstMatch,
+                                  period: periodo || formData.period
+                                })
+                                setMateriaSearchTerm("")
+                                setIsMateriaDropdownOpen(false)
+                                materiaInputRef.current?.blur()
+                              }
+                            }}
+                            className="pl-10"
+                            required
+                            autoComplete="off"
+                          />
+                          {isMateriaDropdownOpen && !loadingMaterias && formData.cursoId && allSubjects.length > 0 && (
+                            <div
+                              ref={materiaDropdownRef}
+                              className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-auto"
+                            >
+                              {filteredSubjects.length > 0 ? (
+                                <div className="p-1">
+                                  {filteredSubjects.map((subject, index) => (
+                                    <div
+                                      key={`subject-${index}-${subject}`}
+                                      onClick={() => {
+                                        const periodo = getPeriodoByMateria(subject)
+                                        setFormData({ 
+                                          ...formData, 
+                                          subject: subject,
+                                          period: periodo || formData.period
+                                        })
+                                        setMateriaSearchTerm("")
+                                        setIsMateriaDropdownOpen(false)
+                                        materiaInputRef.current?.blur()
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // Prevenir que o blur feche o dropdown antes do click
+                                        e.preventDefault()
+                                      }}
+                                      className="px-2 py-1.5 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm flex items-center gap-2"
+                                    >
+                                      <span className="flex-1">{subject}</span>
+                                      {formData.subject === subject && (
+                                        <span className="text-primary">✓</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                  Nenhuma matéria encontrada com esse nome
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {!loadingMaterias && !formData.cursoId && (
+                          <p className="text-sm text-muted-foreground">
+                            Selecione um curso para ver as matérias disponíveis
+                          </p>
+                        )}
+                        {!loadingMaterias && formData.cursoId && allSubjects.length === 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Nenhuma matéria disponível para este curso
                           </p>
                         )}
                       </div>
+
+                      {formData.subject && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>Período:</span>
+                            <span className="font-medium text-foreground">{formData.period}º Período</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -1124,6 +1412,8 @@ export function SolicitacoesPageContent() {
                         onClick={() => {
                           setShowForm(false)
                           setEditingRequest(null)
+                          setMateriaSearchTerm("")
+                          setIsMateriaDropdownOpen(false)
                           setFormData({
                             subject: "",
                             title: "",
@@ -1158,7 +1448,13 @@ export function SolicitacoesPageContent() {
                     <User className="h-4 w-4" />
                     {showMyRequests ? "Todas as Solicitações" : "Minhas Solicitações"}
                   </Button>
-                  <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
+                  <Button onClick={() => {
+                    setCursoSearchTerm("")
+                    setMateriaSearchTerm("")
+                    setIsCursoDropdownOpen(false)
+                    setIsMateriaDropdownOpen(false)
+                    setShowForm(true)
+                  }} className="flex items-center gap-2">
                     <Plus className="h-4 w-4" />
                     Nova Solicitação
                   </Button>
@@ -1189,6 +1485,23 @@ export function SolicitacoesPageContent() {
                     </div>
 
                     <div className="space-y-2">
+                      <label className="text-sm font-medium">Curso</label>
+                      <Select value={courseFilter} onValueChange={setCourseFilter} disabled={loadingCursos}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingCursos ? "Carregando..." : "Todos os cursos"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos os cursos</SelectItem>
+                          {uniqueCourses.map((course, index) => (
+                            <SelectItem key={`filter-course-${index}-${course}`} value={course || ""}>
+                              {course}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
                       <label className="text-sm font-medium">Matéria</label>
                       <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                         <SelectTrigger>
@@ -1201,21 +1514,6 @@ export function SolicitacoesPageContent() {
                               {subject}
                             </SelectItem>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Prioridade</label>
-                      <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todas as prioridades</SelectItem>
-                          <SelectItem value="alta">Alta</SelectItem>
-                          <SelectItem value="media">Média</SelectItem>
-                          <SelectItem value="baixa">Baixa</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1276,7 +1574,17 @@ export function SolicitacoesPageContent() {
                     {paginatedRequests.map((request) => (
                       <Card key={request.id} className="hover:shadow-md transition-shadow">
                         <CardHeader className="pb-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {request.course && (
+                              <Badge variant="outline" className="text-xs">
+                                {request.course}
+                              </Badge>
+                            )}
+                            {request.subject && (
+                              <Badge variant="outline" className="text-xs">
+                                {request.subject}
+                              </Badge>
+                            )}
                             <Badge variant="outline">{request.period}º Período</Badge>
                             {request.availableForChat && (
                               <Badge variant="secondary" className="flex items-center gap-1">
@@ -1313,7 +1621,6 @@ export function SolicitacoesPageContent() {
 
                             <div className="space-y-1">
                               <CardTitle className="text-base">{request.title}</CardTitle>
-                              <CardDescription className="text-sm">{request.subject}</CardDescription>
                               <p className="text-sm text-muted-foreground whitespace-pre-line">
                                 {request.description}
                               </p>
