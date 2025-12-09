@@ -7,9 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BookOpen, Users, MessageCircle, Trophy, Clock, Star, Sparkles, Eye, EyeOff } from "lucide-react"
+import { Sparkles, Eye, EyeOff } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -237,313 +236,195 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Elements */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute top-20 left-20 w-72 h-72 gradient-primary rounded-full opacity-20 blur-3xl float-animation"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 gradient-secondary rounded-full opacity-20 blur-3xl float-animation" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 gradient-accent rounded-full opacity-10 blur-3xl float-animation" style={{ animationDelay: '2s' }}></div>
-      </div>
-
-      <div className="w-full max-w-7xl grid lg:grid-cols-2 gap-12 items-center relative z-10">
-        {/* Seção de Informações sobre o Sistema */}
-        <div className="space-y-8">
-          <div className="text-center lg:text-left">
-            <div className="flex items-center justify-center lg:justify-start gap-4 mb-6">
-              <div className="p-4 rounded-2xl gradient-primary pulse-glow">
-                <Sparkles className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-5xl font-bold mb-2">Ajudaqi</h1>
-                <p className="text-xl text-muted-foreground">Conectando estudantes através da colaboração</p>
-              </div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background to-muted/20">
+      <div className="w-full max-w-md">
+        <Card className="border shadow-lg">
+          <CardHeader className="text-center space-y-2 pb-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Sparkles className="h-6 w-6 text-primary" />
+              <CardTitle className="text-2xl">AjudaQI</CardTitle>
             </div>
-          </div>
+            <CardDescription>Entre na sua conta ou crie uma nova</CardDescription>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <Tabs value={tab} onValueChange={setTab} defaultValue="login" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="login">Entrar</TabsTrigger>
+                <TabsTrigger value="register">Registrar</TabsTrigger>
+              </TabsList>
 
-          <div className="grid gap-6">
-            <Card className="modern-card border-0 hover:scale-105 transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl gradient-primary">
-                    <BookOpen className="h-6 w-6 text-white" />
+              <TabsContent value="login" className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu.email@universidade.edu"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
-                  <CardTitle className="text-xl">Ajuda por Matéria</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
-                  Solicite e ofereça ajuda em matérias específicas do seu curso. Conecte-se com colegas que podem te
-                  auxiliar nos estudos de forma direcionada e eficiente.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="modern-card border-0 hover:scale-105 transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl gradient-secondary">
-                    <Users className="h-6 w-6 text-white" />
-                  </div>
-                  <CardTitle className="text-xl">Comunidade por Curso</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
-                  Acesse dúvidas e ajudas apenas do seu curso e período. Mantenha o foco no que realmente importa para
-                  você e sua jornada acadêmica.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="modern-card border-0 hover:scale-105 transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl gradient-accent">
-                    <MessageCircle className="h-6 w-6 text-white" />
-                  </div>
-                  <CardTitle className="text-xl">Chat Integrado</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
-                  Converse diretamente com quem pode te ajudar. Sistema de chat em tempo real para tirar dúvidas
-                  rapidamente e manter a comunicação fluida.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="modern-card border-0 hover:scale-105 transition-all duration-300">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl gradient-full">
-                    <Trophy className="h-6 w-6 text-white" />
-                  </div>
-                  <CardTitle className="text-xl">Sistema de Conquistas</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
-                  Ganhe horas e conquistas ajudando outros estudantes. Construa sua reputação na comunidade acadêmica
-                  e seja reconhecido pelo seu conhecimento.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
-            <Badge className="gradient-primary text-white border-0 flex items-center gap-2 px-4 py-2">
-              <Clock className="h-4 w-4" />
-              Sistema de Horas
-            </Badge>
-            <Badge className="gradient-secondary text-white border-0 flex items-center gap-2 px-4 py-2">
-              <Star className="h-4 w-4" />
-              Avaliações
-            </Badge>
-            <Badge className="gradient-accent text-white border-0 px-4 py-2">
-              Prioridades
-            </Badge>
-          </div>
-        </div>
-
-        {/* Seção de Login/Registro */}
-        <div className="w-full max-w-lg mx-auto">
-          <Card className="modern-card border-0 shadow-2xl">
-            <CardHeader className="text-center pb-8">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="p-3 rounded-2xl gradient-primary">
-                  <Sparkles className="h-6 w-6 text-white" />
-                </div>
-                <CardTitle className="text-3xl">Bem-vindo ao Ajudaqi</CardTitle>
-              </div>
-              <CardDescription className="text-lg">Entre na sua conta ou crie uma nova para começar</CardDescription>
-            </CardHeader>
-            <CardContent className="px-8 pb-8">
-              <Tabs value={tab} onValueChange={setTab} defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1 rounded-xl">
-                  <TabsTrigger value="login" className="rounded-lg">Entrar</TabsTrigger>
-                  <TabsTrigger value="register" className="rounded-lg">Registrar</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="login" className="space-y-6 mt-8">
-                  <form onSubmit={handleLogin} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="email" className="text-base font-medium">Email</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Senha</Label>
+                    <div className="relative">
                       <Input
-                        id="email"
-                        type="email"
-                        placeholder="seu.email@universidade.edu"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  {error && (
+                    <p className="text-sm text-destructive">{error}</p>
+                  )}
+                  <Button disabled={submitting} type="submit" className="w-full">
+                    {submitting ? 'Entrando...' : 'Entrar'}
+                  </Button>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="register" className="space-y-4">
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome Completo</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="Seu nome completo"
+                      value={name}
+                      onChange={(e) => {
+                        const valueWithoutNumbers = e.target.value.replace(/[0-9]/g, '')
+                        setName(valueWithoutNumbers)
+                      }}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="register-email">Email</Label>
+                    <Input
+                      id="register-email"
+                      type="email"
+                      placeholder="seu.email@universidade.edu"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="matricula">Matrícula</Label>
+                      <Input
+                        id="matricula"
+                        type="number"
+                        placeholder="20250001"
+                        value={matricula}
+                        onChange={(e) => setMatricula(e.target.value)}
                         required
                       />
                     </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="password" className="text-base font-medium">Senha</Label>
-                      <div className="relative">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="h-12 rounded-xl border-2 focus:border-primary transition-colors pr-10"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                        >
-                          {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                        </button>
-                      </div>
-                    </div>
-                    {error && (
-                      <p className="text-sm text-red-600">{error}</p>
-                    )}
-                    <Button disabled={submitting} type="submit" className="w-full h-12 modern-button rounded-xl text-lg font-semibold">
-                      {submitting ? 'Entrando...' : 'Entrar'}
-                    </Button>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="register" className="space-y-6 mt-8">
-                  <form onSubmit={handleRegister} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="name" className="text-base font-medium">Nome Completo</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf">CPF</Label>
                       <Input
-                        id="name"
+                        id="cpf"
                         type="text"
-                        placeholder="Seu nome completo"
-                        value={name}
+                        placeholder="123.456.789-10"
+                        value={cpf}
                         onChange={(e) => {
-                          // Remove números do nome
-                          const valueWithoutNumbers = e.target.value.replace(/[0-9]/g, '')
-                          setName(valueWithoutNumbers)
+                          const maskedValue = applyCpfMask(e.target.value)
+                          setCpf(maskedValue)
+                          const numbers = maskedValue.replace(/\D/g, '')
+                          if (numbers.length === 11) {
+                            const isValid = validateCpf(maskedValue)
+                            setCpfError(isValid ? null : 'CPF inválido')
+                          } else {
+                            setCpfError(null)
+                          }
                         }}
-                        className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
+                        className={cpfError ? 'border-destructive' : ''}
                         required
                       />
+                      {cpfError && (
+                        <p className="text-sm text-destructive">{cpfError}</p>
+                      )}
                     </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="register-email" className="text-base font-medium">Email</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="curso">Curso</Label>
+                      <Select value={curso} onValueChange={setCurso} required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o curso" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cursos.map((c) => (
+                            <SelectItem key={c.CUR_ID} value={c.CUR_ID.toString()}>
+                              {c.CUR_DESC}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="periodo">Período</Label>
+                      <Select value={periodo} onValueChange={setPeriodo} required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o período" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {periodos.map((p) => (
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              {p.desc}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="register-password">Senha</Label>
+                    <div className="relative">
                       <Input
-                        id="register-email"
-                        type="email"
-                        placeholder="seu.email@universidade.edu"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
+                        id="register-password"
+                        type={showRegisterPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label={showRegisterPassword ? "Ocultar senha" : "Mostrar senha"}
+                      >
+                        {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <Label htmlFor="matricula" className="text-base font-medium">Matrícula</Label>
-                        <Input
-                          id="matricula"
-                          type="number"
-                          placeholder="20250001"
-                          value={matricula}
-                          onChange={(e) => setMatricula(e.target.value)}
-                          className="h-12 rounded-xl border-2 focus:border-primary transition-colors"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="cpf" className="text-base font-medium">CPF</Label>
-                        <Input
-                          id="cpf"
-                          type="text"
-                          placeholder="123.456.789-10"
-                          value={cpf}
-                          onChange={(e) => {
-                            const maskedValue = applyCpfMask(e.target.value)
-                            setCpf(maskedValue)
-                            
-                            // Valida CPF apenas se tiver 11 dígitos
-                            const numbers = maskedValue.replace(/\D/g, '')
-                            if (numbers.length === 11) {
-                              const isValid = validateCpf(maskedValue)
-                              setCpfError(isValid ? null : 'CPF inválido')
-                            } else {
-                              setCpfError(null)
-                            }
-                          }}
-                          className={`h-12 rounded-xl border-2 focus:border-primary transition-colors ${cpfError ? 'border-red-500' : ''}`}
-                          required
-                        />
-                        {cpfError && (
-                          <p className="text-sm text-red-600">{cpfError}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <Label htmlFor="curso" className="text-base font-medium">Curso</Label>
-                        <Select value={curso} onValueChange={setCurso} required>
-                          <SelectTrigger className="h-12 w-full rounded-xl border-2 border-input focus:border-primary transition-colors">
-                            <SelectValue placeholder="Selecione o curso" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cursos.map((c) => (
-                              <SelectItem key={c.CUR_ID} value={c.CUR_ID.toString()}>
-                                {c.CUR_DESC}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-3">
-                        <Label htmlFor="periodo" className="text-base font-medium">Período</Label>
-                        <Select value={periodo} onValueChange={setPeriodo} required>
-                          <SelectTrigger className="h-12 w-full rounded-xl border-2 border-input focus:border-primary transition-colors">
-                            <SelectValue placeholder="Selecione o período" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {periodos.map((p) => (
-                              <SelectItem key={p.id} value={p.id.toString()}>
-                                {p.desc}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="register-password" className="text-base font-medium">Senha</Label>
-                      <div className="relative">
-                        <Input
-                          id="register-password"
-                          type={showRegisterPassword ? "text" : "password"}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="h-12 rounded-xl border-2 focus:border-primary transition-colors pr-10"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showRegisterPassword ? "Ocultar senha" : "Mostrar senha"}
-                        >
-                          {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                        </button>
-                      </div>
-                    </div>
-                    {error && (
-                      <p className="text-sm text-red-600">{error}</p>
-                    )}
-                    <Button disabled={submitting} type="submit" className="w-full h-12 modern-button rounded-xl text-lg font-semibold">
-                      {submitting ? 'Criando Conta...' : 'Criar Conta'}
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
+                  </div>
+                  {error && (
+                    <p className="text-sm text-destructive">{error}</p>
+                  )}
+                  <Button disabled={submitting} type="submit" className="w-full">
+                    {submitting ? 'Criando Conta...' : 'Criar Conta'}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={showSuccessDialog} onOpenChange={(v) => {
