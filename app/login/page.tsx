@@ -121,8 +121,8 @@ export default function LoginPage() {
     { id: 8, desc: "8º Período" },
     { id: 9, desc: "9º Período" },
     { id: 10, desc: "10º Período" },
-    { id: 15, desc: "11º Período" },
-    { id: 16, desc: "12º Período" },
+    { id: 11, desc: "11º Período" },
+    { id: 12, desc: "12º Período" },
   ]
 
   const handleLogin = async (e: React.FormEvent) => {

@@ -34,11 +34,7 @@ export async function POST(req: NextRequest) {
     const periodoNumInt = parseInt(periodoNum)
     
     let periodoId: number
-    if (periodoNumInt === 11) {
-      periodoId = 15
-    } else if (periodoNumInt === 12) {
-      periodoId = 16
-    } else if (periodoNumInt >= 1 && periodoNumInt <= 10) {
+    if (periodoNumInt >= 1 && periodoNumInt <= 12) {
       periodoId = periodoNumInt
     } else {
       const periodoRes = await pool.query(`
@@ -254,15 +250,11 @@ export async function PUT(req: NextRequest) {
 
     const cursoId = usuarioRes.rows[0].usu_idcurso
 
-    // Buscar PER_ID baseado no número do período
+    // 2. Buscar PER_ID baseado no número do período
     const periodoNumInt = parseInt(periodoNum)
     
     let periodoId: number
-    if (periodoNumInt === 11) {
-      periodoId = 15
-    } else if (periodoNumInt === 12) {
-      periodoId = 16
-    } else if (periodoNumInt >= 1 && periodoNumInt <= 10) {
+    if (periodoNumInt >= 1 && periodoNumInt <= 12) {
       periodoId = periodoNumInt
     } else {
       const periodoRes = await pool.query(`
@@ -351,12 +343,24 @@ export async function DELETE(req: NextRequest) {
 
     const pool = await getPool()
 
-    // Verificar se a dúvida existe e se pertence ao usuário
+    // Buscar dados da dúvida e do usuário que está deletando
     const checkRes = await pool.query(`
-      SELECT duv_idduvida, duv_idusuario
-      FROM duvida
-      WHERE duv_idduvida = $1
-    `, [duvidaId])
+      SELECT 
+        d.duv_idduvida, 
+        d.duv_idusuario,
+        d.duv_titulo,
+        d.duv_descricao,
+        u_autor.usu_nome as autor_nome,
+        u_deletou.usu_id,
+        u_deletou.usu_nome,
+        u_deletou.usu_email,
+        u_deletou.usu_matricula,
+        u_deletou.usu_idpermissao
+      FROM duvida d
+      LEFT JOIN usuario u_autor ON d.duv_idusuario = u_autor.usu_id
+      LEFT JOIN usuario u_deletou ON u_deletou.usu_id = $2
+      WHERE d.duv_idduvida = $1
+    `, [duvidaId, usuarioId])
 
     if (!checkRes.rows[0]) {
       return NextResponse.json(
@@ -365,25 +369,69 @@ export async function DELETE(req: NextRequest) {
       )
     }
 
-    // Verificar se a dúvida pertence ao usuário
-    const duvidaUsuarioId = typeof checkRes.rows[0].duv_idusuario === 'string'
-      ? parseInt(checkRes.rows[0].duv_idusuario, 10)
-      : Number(checkRes.rows[0].duv_idusuario)
+    const duvida = checkRes.rows[0]
+
+    // Verificar se a dúvida pertence ao usuário OU se é admin (permissão 2)
+    const duvidaUsuarioId = typeof duvida.duv_idusuario === 'string'
+      ? parseInt(duvida.duv_idusuario, 10)
+      : Number(duvida.duv_idusuario)
     
     const usuarioIdNumber = typeof usuarioId === 'string' ? parseInt(usuarioId, 10) : Number(usuarioId)
+    const usuarioPermissao = duvida.usu_idpermissao
 
-    if (duvidaUsuarioId !== usuarioIdNumber) {
+    const isAdmin = usuarioPermissao === 2 || usuarioPermissao === '2'
+    const isOwner = duvidaUsuarioId === usuarioIdNumber
+
+    // Log para debug
+    console.log('DEBUG DELETE - Verificação de permissão:', {
+      duvidaId,
+      usuarioId: usuarioIdNumber,
+      duvidaUsuarioId,
+      usuarioPermissao,
+      isAdmin,
+      isOwner,
+      temPermissao: isOwner || isAdmin
+    })
+
+    if (!isOwner && !isAdmin) {
       return NextResponse.json(
         { ok: false, error: 'Você não tem permissão para excluir esta dúvida' },
         { status: 403 }
       )
     }
 
-    // Excluir a dúvida (as respostas serão excluídas automaticamente devido ao CASCADE)
+    // Registrar log antes de excluir
+    await pool.query(`
+      INSERT INTO logexclusaoduvida (
+        log_idduvida,
+        log_titulo,
+        log_descricao,
+        log_idusuario_autor,
+        log_nome_autor,
+        log_idusuario_deletou,
+        log_nome_deletou,
+        log_email_deletou,
+        log_matricula_deletou
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      duvidaId,
+      duvida.duv_titulo,
+      duvida.duv_descricao,
+      duvida.duv_idusuario,
+      duvida.autor_nome,
+      usuarioIdNumber,
+      duvida.usu_nome,
+      duvida.usu_email,
+      duvida.usu_matricula
+    ])
+
+    // Excluir a dúvida (as respostas e comentários serão excluídos automaticamente devido ao CASCADE)
     await pool.query(`
       DELETE FROM duvida
       WHERE duv_idduvida = $1
     `, [duvidaId])
+
+    console.log(`Dúvida ${duvidaId} excluída por ${duvida.usu_nome} (${duvida.usu_email}) - Matrícula: ${duvida.usu_matricula || 'N/A'}`)
 
     return NextResponse.json({
       ok: true,
