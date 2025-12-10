@@ -937,6 +937,14 @@ export function SolicitacoesPageContent() {
     const mediaGlobal = getGlobalAverage()
 
     return [...responses].sort((a, b) => {
+      // PRIORIDADE MÁXIMA: Melhor resposta sempre vem primeiro
+      if (a.RES_MELHORRESPOSTA && !b.RES_MELHORRESPOSTA) {
+        return -1 // a vem primeiro
+      }
+      if (!a.RES_MELHORRESPOSTA && b.RES_MELHORRESPOSTA) {
+        return 1 // b vem primeiro
+      }
+
       const avaliacoesA = a.TOTAL_AVALIACOES ?? 0
       const avaliacoesB = b.TOTAL_AVALIACOES ?? 0
       
@@ -1632,18 +1640,20 @@ export function SolicitacoesPageContent() {
                               </div>
 
                               <div className="flex gap-2">
-                              {request.author.isCurrentUser ? (
-                                // Botões para solicitações do próprio usuário
+                              {request.author.isCurrentUser || user?.USU_IDPERMISSAO === 2 ? (
+                                // Botões para solicitações do próprio usuário OU admin
                                 <div className="flex gap-2">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => handleEditRequest(request)}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                    Editar
-                                  </Button>
+                                  {request.author.isCurrentUser && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => handleEditRequest(request)}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                      Editar
+                                    </Button>
+                                  )}
                                   <Button 
                                     size="sm" 
                                     variant="destructive" 
@@ -1720,47 +1730,27 @@ export function SolicitacoesPageContent() {
                               ) : (() => {
                                 const sortedResponses = getSortedResponses(request.id)
                                 const mediaGlobal = getGlobalAverage()
-                                const responseCount = sortedResponses.length
-                                // Calcular altura adaptativa: ~150px por resposta, máximo 400px
-                                // Mínimo de altura para 1 resposta, máximo de 400px
-                                const adaptiveHeight = Math.min(Math.max(responseCount * 150, 200), 400)
                                 
                                 return (
-                                  <ScrollArea className="pr-4" style={{ height: `${adaptiveHeight}px`, maxHeight: '400px' }}>
-                                    <div className="space-y-3">
-                                      {sortedResponses.map((resposta, index) => {
-                                        // Só mostrar badge se tiver avaliações e for realmente a melhor
-                                        const hasAvaliacoes = resposta.TOTAL_AVALIACOES !== null && resposta.TOTAL_AVALIACOES > 0
-                                        
-                                        // Verificar se é a melhor resposta
-                                        // Se está no índice 0, tem avaliações, e há outras respostas, é a melhor
-                                        const isTopRated = index === 0 && 
-                                          sortedResponses.length > 1 && 
-                                          hasAvaliacoes
+                                  <div className="space-y-3 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {sortedResponses.map((resposta, index) => {
+                                      // Badge de melhor resposta vem do banco (res_melhorresposta)
+                                      const isMelhorResposta = resposta.RES_MELHORRESPOSTA === true
 
-                                        return (
-                                        <div key={resposta.RES_IDRESPOSTA} className="rounded-md border p-3 relative">
-                                          <div className="flex items-center justify-between gap-4">
-                                            <div className="flex-1">
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <p className="text-sm font-semibold flex items-center gap-1">
-                                                  {resposta.USU_NOME}
-                                                  {typeof resposta.USU_AVALIACAO === "number" && (
-                                                    <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                                                      • ⭐ {resposta.USU_AVALIACAO.toFixed(1)}
-                                                    </span>
-                                                  )}
-                                                </p>
-                                                {isTopRated && sortedResponses.length > 1 && (
-                                                  <Badge className="bg-yellow-500 text-white text-xs px-2 py-0.5">
-                                                    ⭐ Melhor avaliada
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                              <p className="text-xs text-muted-foreground">
-                                                {resposta.USUARIO_CURSO_DESC || "Curso não informado"} • {resposta.USUARIO_PERIODO_DESC || "Período não informado"}
+                                      return (
+                                      <div key={resposta.RES_IDRESPOSTA} className="rounded-md border p-3 bg-card">
+                                        {/* Conteúdo fixo da resposta */}
+                                        <div className="flex items-center justify-between gap-4">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <p className="text-sm font-semibold">
+                                                {resposta.USU_NOME}
                                               </p>
                                             </div>
+                                            <p className="text-xs text-muted-foreground">
+                                              {resposta.USUARIO_CURSO_DESC || "Curso não informado"} • {resposta.USUARIO_PERIODO_DESC || "Período não informado"}
+                                            </p>
+                                          </div>
                                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                                           {formatTimeAgo(resposta.RES_DATARESPOSTA)}
                                         </span>
@@ -1806,8 +1796,7 @@ export function SolicitacoesPageContent() {
                                             ? parseInt(resposta.RES_IDUSUARIO, 10) 
                                             : Number(resposta.RES_IDUSUARIO)
                                           
-                                          // BLOQUEAR: Não mostrar botões de avaliação se for a própria resposta
-                                          // Usar comparação estrita com conversão explícita para garantir que funcione sempre
+                                          // Verificar se é a própria resposta
                                           const isOwnResponse = currentUserId !== null && 
                                             currentUserId !== undefined && 
                                             respostaUserId !== null && 
@@ -1817,76 +1806,97 @@ export function SolicitacoesPageContent() {
                                           // Verificar se é admin (permissão 2)
                                           const isAdmin = user?.USU_IDPERMISSAO === 2 || user?.USU_IDPERMISSAO === '2'
                                           
-                                          // Se for a própria resposta OU admin, mostrar botões de editar/excluir (apenas se não estiver editando)
-                                          if ((isOwnResponse || isAdmin) && editingResponseId !== resposta.RES_IDRESPOSTA) {
-                                            return (
-                                              <div className="flex items-center justify-end gap-2">
-                                                {isOwnResponse && (
+                                          return (
+                                            <>
+                                              {/* Botões de editar/excluir - apenas para autor ou admin */}
+                                              {(isOwnResponse || isAdmin) && editingResponseId !== resposta.RES_IDRESPOSTA && (
+                                                <div className="flex items-center justify-end gap-2 mb-2">
+                                                  {isOwnResponse && (
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() => handleEditResponse(resposta)}
+                                                      className="h-7 text-xs"
+                                                    >
+                                                      <Edit className="h-3 w-3 mr-1" />
+                                                      Editar
+                                                    </Button>
+                                                  )}
                                                   <Button
                                                     size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleEditResponse(resposta)}
+                                                    variant="destructive"
+                                                    onClick={() => handleDeleteResponse(resposta.RES_IDRESPOSTA)}
                                                     className="h-7 text-xs"
                                                   >
-                                                    <Edit className="h-3 w-3 mr-1" />
-                                                    Editar
+                                                    <Trash2 className="h-3 w-3 mr-1" />
+                                                    Excluir
                                                   </Button>
-                                                )}
-                                                <Button
-                                                  size="sm"
-                                                  variant="destructive"
-                                                  onClick={() => handleDeleteResponse(resposta.RES_IDRESPOSTA)}
-                                                  className="h-7 text-xs"
-                                                >
-                                                  <Trash2 className="h-3 w-3 mr-1" />
-                                                  Excluir
-                                                </Button>
-                                              </div>
-                                            )
-                                          }
-                                          
-                                          // Mostrar botões apenas se NÃO for a própria resposta
-                                          return (
-                                              <div className="flex items-center gap-2">
-                                                <div className="flex items-center gap-1">
-                                                  {[1, 2, 3, 4, 5].map((starValue) => {
-                                                    const isActive = (resposta.USUARIO_AVALIACAO ?? 0) >= starValue
-                                                    const jaAvaliou = resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined
-                                                    return (
-                                                      <button
-                                                        key={starValue}
-                                                        type="button"
-                                                        onClick={() => handleRateResponse(resposta.RES_IDRESPOSTA, starValue)}
-                                                        className="p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
-                                                        title={jaAvaliou 
-                                                          ? `Alterar avaliação para ${starValue} estrela${starValue > 1 ? "s" : ""}` 
-                                                          : `Avaliar com ${starValue} estrela${starValue > 1 ? "s" : ""}`}
-                                                        disabled={ratingLoadingId === resposta.RES_IDRESPOSTA}
-                                                      >
-                                                        <Star
-                                                          className={`h-4 w-4 ${isActive ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
-                                                        />
-                                                      </button>
-                                                    )
-                                                  })}
                                                 </div>
-                                                {resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined && (
-                                                  <span className="text-xs text-muted-foreground italic">
-                                                    (Sua avaliação)
-                                                  </span>
-                                                )}
-                                              </div>
-                                            )
+                                              )}
+                                              
+                                              {/* Sistema de votação - mostrar para todos EXCETO autor da resposta */}
+                                              {!isOwnResponse ? (
+                                                <>
+                                                  <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-1">
+                                                      {[1, 2, 3, 4, 5].map((starValue) => {
+                                                        const isActive = (resposta.USUARIO_AVALIACAO ?? 0) >= starValue
+                                                        const jaAvaliou = resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined
+                                                        return (
+                                                          <button
+                                                            key={starValue}
+                                                            type="button"
+                                                            onClick={() => handleRateResponse(resposta.RES_IDRESPOSTA, starValue)}
+                                                            className="p-0.5 cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title={jaAvaliou 
+                                                              ? `Alterar avaliação para ${starValue} estrela${starValue > 1 ? "s" : ""}` 
+                                                              : `Avaliar com ${starValue} estrela${starValue > 1 ? "s" : ""}`}
+                                                            disabled={ratingLoadingId === resposta.RES_IDRESPOSTA}
+                                                          >
+                                                            <Star
+                                                              className={`h-4 w-4 transition-colors ${isActive ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-200"}`}
+                                                            />
+                                                          </button>
+                                                        )
+                                                      })}
+                                                    </div>
+                                                    {resposta.USUARIO_AVALIACAO !== null && resposta.USUARIO_AVALIACAO !== undefined && (
+                                                      <span className="text-xs text-muted-foreground italic">
+                                                        (Sua avaliação: {resposta.USUARIO_AVALIACAO} estrela{resposta.USUARIO_AVALIACAO > 1 ? 's' : ''})
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  <div className="text-xs text-muted-foreground mt-1">
+                                                    {resposta.MEDIA_AVALIACAO
+                                                      ? `Média: ${Number(resposta.MEDIA_AVALIACAO).toFixed(1)} / 5`
+                                                      : "Seja o primeiro a avaliar"}
+                                                    <span> • {resposta.TOTAL_AVALIACOES ?? 0} voto(s)</span>
+                                                    {resposta.RES_MELHORRESPOSTA && (
+                                                      <Badge variant="default" className="ml-2 text-xs">
+                                                        ⭐ Melhor Resposta
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <div className="text-xs text-muted-foreground mt-1">
+                                                  {resposta.MEDIA_AVALIACAO
+                                                    ? `Média: ${Number(resposta.MEDIA_AVALIACAO).toFixed(1)} / 5`
+                                                    : "Ainda sem avaliações"}
+                                                  <span> • {resposta.TOTAL_AVALIACOES ?? 0} voto(s)</span>
+                                                  {resposta.RES_MELHORRESPOSTA && (
+                                                    <Badge variant="default" className="ml-2 text-xs">
+                                                      ⭐ Melhor Resposta
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </>
+                                          )
                                         })()}
-                                        <div className="text-muted-foreground">
-                                          {resposta.MEDIA_AVALIACAO
-                                            ? `${Number(resposta.MEDIA_AVALIACAO).toFixed(1)} / 5`
-                                            : "Ainda sem avaliações"}
-                                          <span> • {resposta.TOTAL_AVALIACOES ?? 0} voto(s)</span>
-                                        </div>
                                       </div>
                                       
-                                      {/* Comentários da resposta */}
+                                      {/* Comentários da resposta - com scroll independente */}
                                       <div className="mt-4 pt-3 border-t">
                                         <Comentarios 
                                           idResposta={resposta.RES_IDRESPOSTA}
@@ -1900,10 +1910,9 @@ export function SolicitacoesPageContent() {
                                         />
                                       </div>
                                     </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </ScrollArea>
+                                      )
+                                    })}
+                                  </div>
                                 )
                               })()}
                             </div>

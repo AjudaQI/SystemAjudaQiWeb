@@ -326,7 +326,7 @@ function DashboardPageContent() {
                     className="w-full modern-button rounded-xl h-12 text-base font-semibold"
                     onClick={handleVerTodasSolicitacoes}
                   >
-                    Ver Todas as Solicitações
+                    Ver Minhas Solicitações
                   </Button>
                 </CardContent>
               </Card>
